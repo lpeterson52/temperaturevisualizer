@@ -2,15 +2,20 @@
 <html>
 <head>
     <meta charset="UTF-8" />
-    <title>title</title>
+    <title>Temperature Visualizer</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="loader.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <h1 id="test">Temperature Visualizer</h1>
-    <div>
-        <canvas id="myChart"></canvas>
+    <form id="search-form" onsubmit="return handleSearch(event)">
+        <input type="text" id="search-input" placeholder="YYYY-MM-DD" />
+    </form>
+    <div id="dates-container">
+        <span class="loader"></span>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="index.js"></script>
-    <div id="dates">hi</p>
+    <script src="searchbar.js"></script>
 </body>
 </html>
