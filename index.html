@@ -1,21 +1,31 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <meta charset="UTF-8" />
     <title>Temperature Visualizer</title>
-    <link rel="stylesheet" href="index.css">
-    <link rel="stylesheet" href="loader.css">
+    <link rel="stylesheet" href="index.css" />
+    <link rel="stylesheet" href="loader.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <h1 id="test">Temperature Visualizer</h1>
+  </head>
+  <body>
+    <h1>Temperature Visualizer</h1>
     <form id="search-form" onsubmit="return handleSearch(event)">
-        <input type="text" id="search-input" placeholder="YYYY-MM-DD" />
+      <input type="text" id="search-input" placeholder="YYYY-MM-DD" />
     </form>
     <div id="dates-container">
-        <span class="loader"></span>
+      <span class="loader"></span>
     </div>
-    <script src="index.js"></script>
-    <script src="searchbar.js"></script>
-</body>
+    <div id="test"></div>
+    <div>Start Date:</div>
+    <form id="start-date-form">
+      <input type="text" id="start-date-input" placeholder="YYYY-MM-DD" />
+    </form>
+    <div>End Date:</div>
+    <form id="end-date-form">
+      <input type="text" id="end-date-input" placeholder="YYYY-MM-DD" />
+    </form>
+    <button id="range-search-button">Search</button>
+    <div id="range-search-container"></div>
+    <script type="module" src="index.js"></script>
+  </body>
 </html>

@@ -7,6 +7,9 @@
   border: 1px solid #ccc; 
   padding: 5px;
 }
+#range-search-container {
+    background-color: #f0f0f0
+}
 .searchable {
     display:flex;
     color:black;
