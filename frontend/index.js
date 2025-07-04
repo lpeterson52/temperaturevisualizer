@@ -41,6 +41,11 @@ async function getFileLinks(fileLinkURL){
     return fileLinkJSON;
 }
 
+async function getCSV(url) {
+    const result = await fetch(url);
+    console.log(result);
+}
+
 function constructDateArray(fileLinkJSON){
     const dates = [];
     for (const object of fileLinkJSON) {
@@ -57,7 +62,7 @@ function dateToFileName(date){
     return "D_" + date + ".csv";
 }
 
-function displayItems(filteredItems, containerName) {
+async function displayItems(filteredItems, containerName, fileLinkJSON) {
     const container = document.getElementById(containerName)
     container.innerHTML = "";
     filteredItems.forEach(item => {
@@ -67,8 +72,9 @@ function displayItems(filteredItems, containerName) {
         dateButton.onclick = () => {
             currFile = dateToFileName(item);
             console.log(currFile);
-            test = document.getElementById("test");
-            test.innerHTML = "Current file: " + currFile;
+            const url = findURL(fileLinkJSON, currFile)
+            console.log(url);
+            console.log(getCSV(url));
         }
         container.appendChild(dateButton);
     });
@@ -81,14 +87,27 @@ function handleSearch(event){
     displayItems(filtered, "dates-container");
 }
 
+function findURL(fileLinkJSON, filename) {
+    // Only parse if it's a string
+    console.log("fileLinkJSON:", fileLinkJSON);
+    const parsedData = typeof fileLinkJSON === "string"
+        ? JSON.parse(fileLinkJSON)
+        : fileLinkJSON;
+
+    const match = parsedData.find(item => item.name === filename);
+    return match ? match.url : null;
+}
+
 async function main(){
     const fileLinkURL = "https://script.google.com/macros/s/AKfycbzNeJvs8VXCqja9ia-DY3lORan0-z1L-H_LonUwDnZ6_wbNsU7mS779S1AvWYIPV8oH4g/exec";
 
     const fileLinkJSON = await getFileLinks(fileLinkURL);
+    console.log(fileLinkJSON);
     dates = constructDateArray(fileLinkJSON); // use global `dates`
     console.log(dates);
-    displayItems(dates, "dates-container");
-    displayItems(dates, "range-search-container");
+    console.log(findURL(fileLinkJSON, "D_2025-07-03.csv"));
+    displayItems(dates, "dates-container", fileLinkJSON);
+    displayItems(dates, "range-search-container", fileLinkJSON);
 }
 
 main();
