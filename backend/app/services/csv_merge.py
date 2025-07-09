@@ -1,7 +1,9 @@
 import pandas as pd
 from typing import List
-import requests
+import httpx
 from datetime import date
+import io
+import asyncio
 # from api.cache import cached_file_dict
 
 async def fetch_and_merge_csvs(start_date: str, end_date: str) -> pd.DataFrame:
@@ -36,6 +38,49 @@ def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[
     filtered_dates = [d for d in datelist if is_date_between(d, start_date, end_date)]
     return filtered_dates
 
+async def fetch_csvs_from_drive(datelist: List[date], filedict: dict) -> List[pd.DataFrame]:
+    """
+    Fetches the csvs associated with the given datelist from google drive, converts them to pandas dataframes and returns a list.
+
+    Args:
+        datelist: A list of dates to be fetched from google drive
+        filedict: A dictionary of the form {filename: url}
+    Returns:
+        List[pd.DataFrame]: A list of dataframes containing the information in the csvs fetched
+    """
+    dataframes = {} # dictionary to store the fetched dataframes filename: dataframe
+
+    filelist = list(map(date_to_filename, datelist)) # list of filenames to be fetched
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        tasklist = []
+        # create task list for asyncio.gather
+        for filename in filelist:
+            tasklist.append(fetch_csv(client, filename, filedict[filename]))
+        
+        results = await asyncio.gather(*tasklist, return_exceptions=True)
+
+        # if result is valid, append it to dataframe dictionary
+        for result in results:
+            if isinstance(result, tuple) and result[1] is not None:
+                filename, df = result
+                dataframes[filename] = df
+    
+    return dataframes
+   
+
+async def fetch_csv(client, filename, url):
+    try:
+        response = await client.get(url)
+        response.raise_for_status()
+        df = pd.read_csv(io.StringIO(response.text))
+        return filename, df
+    except Exception as e:
+        print(f"Failed to fetch {filename}: {e}")
+        return filename, None
+
+# ------------------------------
+# ---- Conversion Functions ----
+# ------------------------------
 def filename_to_date(filename: str) -> date:
     """
     Converts a filename of the form D_YYYY-MM-DD.csv to its corresponding date
