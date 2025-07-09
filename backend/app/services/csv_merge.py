@@ -4,9 +4,10 @@ import httpx
 from datetime import date
 import io
 import asyncio
+from app.api.cache import cached_file_dict
 # from api.cache import cached_file_dict
 
-async def fetch_and_merge_csvs(start_date: str, end_date: str) -> pd.DataFrame:
+async def fetch_and_merge_csvs(start_date: str, end_date: str, cached_file_dict: dict) -> pd.DataFrame:
     """
     Returns a pandas dataframe containing the merged csv data
     
@@ -16,8 +17,20 @@ async def fetch_and_merge_csvs(start_date: str, end_date: str) -> pd.DataFrame:
     Return:
         pd.DataFrame: A DataFrame containing the merged csv information.
     """
-    global cached_file_dict
-    pass
+    datelist = get_dates_between(start_date=str_to_date(start_date), 
+                                 end_date=str_to_date(end_date), 
+                                 filedict=cached_file_dict)
+    fetched_frames = await fetch_csvs_from_drive(datelist=datelist, filedict=cached_file_dict)
+    date_key_dict = {}
+    
+    for filename in fetched_frames:
+        date_key_dict[filename_to_date(filename)] = fetched_frames[filename]
+    sorted_dates = sorted(date_key_dict.keys())
+    sorted_frames = []
+    for d in sorted_dates:
+        sorted_frames.append(date_key_dict[d])
+    
+    return pd.concat(sorted_frames)
 
 def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[date]:
     """
@@ -29,7 +42,6 @@ def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[
     Returns:
         list[date]: A list of dates between the given start date and end date inclusive.
     """
-
     def is_date_between(date: date, start_date: date, end_date: date) -> bool:
         return start_date <= date and date <= end_date
 
@@ -51,7 +63,7 @@ async def fetch_csvs_from_drive(datelist: List[date], filedict: dict) -> List[pd
     dataframes = {} # dictionary to store the fetched dataframes filename: dataframe
 
     filelist = list(map(date_to_filename, datelist)) # list of filenames to be fetched
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         tasklist = []
         # create task list for asyncio.gather
         for filename in filelist:
@@ -90,7 +102,7 @@ def filename_to_date(filename: str) -> date:
     Returns:
         date: A date that corresponds with the filename
     """
-    date_str = filename[2:-4]
+    date_str = str(filename[2: len(filename) - 4])
     return str_to_date(date_str)
 
 def str_to_date(datestr: str) -> date:

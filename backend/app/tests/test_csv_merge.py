@@ -1,17 +1,18 @@
 import pytest
 from services import csv_merge
 from datetime import date
+from api.cache import fetch_file_json, get_file_dict
 import respx
 import httpx
 import pandas as pd
 
 
 def test_get_dates_between():
-    mock_dict = {"D_2025-3-24.csv": "drive.google.com/1",
-                 "D_2025-3-25.csv": "drive.google.com/2",
-                 "D_2025-3-30.csv": "drive.google.com/3",
-                 "D_2025-4-30.csv": "drive.google.com/4",
-                 "D_2025-5-1.csv": "drive.google.com/5"}
+    mock_dict = {"D_2025-03-24.csv": "drive.google.com/1",
+                 "D_2025-03-25.csv": "drive.google.com/2",
+                 "D_2025-03-30.csv": "drive.google.com/3",
+                 "D_2025-04-30.csv": "drive.google.com/4",
+                 "D_2025-05-01.csv": "drive.google.com/5"}
     
     start_date = date(2025, 3, 25) # 2025-3-25
     end_date = date(2025, 4, 30) # 2025-4-30
@@ -73,5 +74,47 @@ async def test_fetch_csvs_from_drive():
     assert isinstance(result["D_2025-07-03.csv"], pd.DataFrame)
     assert result["D_2025-07-03.csv"].iloc[0]["temp"] == 25
     assert result["D_2025-06-25.csv"].iloc[1]["date"] == "2025-06-25"
-    
-    
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fetch_and_merge_csvs():
+    # Distinct mock CSVs per file
+    csv_2025_07_03 = "date,temp\n2025-07-03,25\n2025-07-03,26"
+    csv_2025_07_04 = "date,temp\n2025-07-04,27\n2025-07-04,28"
+
+    mock_dict = {
+        "D_2025-07-03.csv": "https://drive.mock/D_2025-07-03.csv",
+        "D_2025-07-04.csv": "https://drive.mock/D_2025-07-04.csv",
+    }
+
+    respx.get("https://drive.mock/D_2025-07-03.csv").mock(
+        return_value=httpx.Response(200, content=csv_2025_07_03)
+    )
+    respx.get("https://drive.mock/D_2025-07-04.csv").mock(
+        return_value=httpx.Response(200, content=csv_2025_07_04)
+    )
+
+    df = await csv_merge.fetch_and_merge_csvs("2025-07-03", "2025-07-04", mock_dict)
+
+    assert isinstance(df, pd.DataFrame)
+    assert not df.empty
+    assert len(df) == 4  # 2 rows per CSV, 2 CSVs
+    assert "date" in df.columns
+    assert "temp" in df.columns
+
+    # Additional optional asserts
+    assert (df['temp'] == [25, 26, 27, 28]).all()
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="Integration test that fetches from google drive")
+async def test_live_fetch_from_google_drive():
+    start_date = "2025-07-01"
+    end_date = "2025-07-04"
+    filejson = await fetch_file_json()
+    filedict = get_file_dict(filejson)
+    print("fetched")
+    df = await csv_merge.fetch_and_merge_csvs(start_date=start_date, 
+                                              end_date=end_date, 
+                                              cached_file_dict=filedict)
+
+    assert not df.empty

@@ -35,3 +35,10 @@ async def test_fetch_file_json():
     result = await cache.fetch_file_json()
     assert isinstance(result, list)
     assert result == mock_response
+
+@pytest.mark.asyncio
+@pytest.mark.skip("Integration test to fetch available files")
+async def test_live_fetch_file_json():
+    result = await cache.fetch_file_json()
+    assert isinstance(result, list)
+    print(result)

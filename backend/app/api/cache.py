@@ -16,8 +16,8 @@ async def fetch_file_json():
         dict: A JSON with a list of objects containing the filename, the id=, and URL. 
     """
     # set timeout to deal with long response times
-    timeout = httpx.Timeout(timeout=10.0, read=10.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    timeout = httpx.Timeout(timeout=30.0, read=30.0)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         result = await client.get("https://script.google.com/macros/s/AKfycbzNeJvs8VXCqja9ia-DY3lORan0-z1L-H_LonUwDnZ6_wbNsU7mS779S1AvWYIPV8oH4g/exec")
         resultDict = result.json()
         return resultDict
