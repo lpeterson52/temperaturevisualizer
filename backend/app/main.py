@@ -2,13 +2,14 @@ from typing import Union
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from api.cache import refresh_cache, cache_router
-from api.routes import merge_router
+from app.api.cache import refresh_cache, router as cache_router
+from app.api.routes import router as merge_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(refresh_cache())
+    yield
 
 app = FastAPI(lifespan=lifespan)
 

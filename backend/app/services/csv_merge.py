@@ -17,19 +17,21 @@ async def fetch_and_merge_csvs(start_date: str, end_date: str, cached_file_dict:
     Return:
         pd.DataFrame: A DataFrame containing the merged csv information.
     """
+    print("cached_file_dict keys:", list(cached_file_dict.keys()))
+    print("start_date:", start_date, "end_date:", end_date)
     datelist = get_dates_between(start_date=str_to_date(start_date), 
                                  end_date=str_to_date(end_date), 
                                  filedict=cached_file_dict)
+    print("datelist:", datelist)
     fetched_frames = await fetch_csvs_from_drive(datelist=datelist, filedict=cached_file_dict)
+    print("fetched_frames:", fetched_frames)
     date_key_dict = {}
     
-    for filename in fetched_frames:
-        date_key_dict[filename_to_date(filename)] = fetched_frames[filename]
+    for filename, df in fetched_frames.items():
+        date_key_dict[filename_to_date(filename)] = df
     sorted_dates = sorted(date_key_dict.keys())
-    sorted_frames = []
-    for d in sorted_dates:
-        sorted_frames.append(date_key_dict[d])
-    
+    sorted_frames = [date_key_dict[d] for d in sorted_dates]
+    print("sorted_frames:", sorted_frames)
     return pd.concat(sorted_frames)
 
 def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[date]:
@@ -50,15 +52,15 @@ def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[
     filtered_dates = [d for d in datelist if is_date_between(d, start_date, end_date)]
     return filtered_dates
 
-async def fetch_csvs_from_drive(datelist: List[date], filedict: dict) -> List[pd.DataFrame]:
+async def fetch_csvs_from_drive(datelist: List[date], filedict: dict) -> dict:
     """
-    Fetches the csvs associated with the given datelist from google drive, converts them to pandas dataframes and returns a list.
+    Fetches the csvs associated with the given datelist from google drive, converts them to pandas dataframes and returns a dictionary.
 
     Args:
         datelist: A list of dates to be fetched from google drive
         filedict: A dictionary of the form {filename: url}
     Returns:
-        List[pd.DataFrame]: A list of dataframes containing the information in the csvs fetched
+        dict: A dictionary with filenames as keys and DataFrames as values {filename: DataFrame}
     """
     dataframes = {} # dictionary to store the fetched dataframes filename: dataframe
 

@@ -40,9 +40,10 @@ def get_file_dict(fileJSON):
 async def refresh_cache():
     global cached_file_dict
     while True:
-        cached_file_dict = await get_file_dict(fetch_file_json())
-        print("Cache refreshed:", cached_file_dict)
-        await asyncio.sleep(60) # refresh every minute
+        fileJSON = await fetch_file_json()
+        cached_file_dict = get_file_dict(fileJSON)
+        print("Cache refreshed")
+        await asyncio.sleep(3600) # refresh every hour
 
 @router.get("/")
 def get_available_files():
