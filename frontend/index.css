@@ -1,16 +1,6 @@
-#dates-container {
-  margin: 5px;
-  background-color: #f0f0f0;
-  border-radius: 4px;
-  max-height:200px;
-  overflow-y: auto;
-  border: 1px solid #ccc; 
-  padding: 5px;
-}
-#range-search-container {
-    background-color: #f0f0f0
-}
-.searchable {
-    display:flex;
-    color:black;
+#chart-container {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin: 10px;
+    max-height: 70vh;
 }

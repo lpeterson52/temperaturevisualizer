@@ -1,33 +1,50 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>Temperature Visualizer</title>
-    <link rel="stylesheet" href="index.css" />
-    <link rel="stylesheet" href="loader.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
-  <body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Temperature Visualizer</title>
+  <!-- Link to your CSS files -->
+  <link rel="stylesheet" href="index.css" />
+  <!-- Favicon (optional) -->
+  <!-- <link rel="icon" href="favicon.ico" /> -->
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
     <h1>Temperature Visualizer</h1>
-    <form id="search-form" onsubmit="return handleSearch(event)">
-      <input type="text" id="search-input" placeholder="YYYY-MM-DD" />
-    </form>
-    <div id="dates-container">
-      <span class="loader"></span>
+  </header>
+  
+  <main>
+    <!-- Main content goes here -->
+    <div id="app">
+      <div id="chart-container">
+        <canvas id="temperatureChart" width="600" height="400"></canvas>
+      </div>  
     </div>
-    <div id="test"></div>
-    <div>Start Date:</div>
-    <form id="start-date-form">
-      <input type="text" id="start-date-input" placeholder="YYYY-MM-DD" />
-    </form>
-    <div>End Date:</div>
-    <form id="end-date-form">
-      <input type="text" id="end-date-input" placeholder="YYYY-MM-DD" />
-    </form>
-    <button id="range-search-button">Search</button>
-    <div id="range-search-container">
-        <span class="loader"></span>
+    <div id="date-form">
+      <form id="dateForm">
+        <label for="startDate">Start Date:</label>
+        <input type="date" id="startDate" name="startDate" required>
+        <label for="endDate">End Date:</label>
+        <input type="date" id="endDate" name="endDate" required>
+        <button type="submit">Submit</button>
+      </form>
     </div>
-    <script type="module" src="index.js"></script>
-  </body>
+    <div id="checkbox-container">
+      <label for="tankA1">Tank A1 Warm</label>
+      <input type="checkbox" id="tankA1" name="tankA1">
+      <label for="tankB1">Tank B1 Cool</label>
+      <input type="checkbox" id="tankB1" name="tankB1">
+    </div>
+  </main>
+  
+  <footer>
+    <p>&copy; 2024 Temperature Visualizer</p>
+  </footer>
+  
+  <!-- Link to your JS files -->
+  <script src="index.js"></script>
+</body>
 </html>
