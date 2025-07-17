@@ -1,48 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Temperature Visualizer</title>
-  <!-- Link to your CSS files -->
-  <link rel="stylesheet" href="index.css" />
-  <!-- Favicon (optional) -->
-  <!-- <link rel="icon" href="favicon.ico" /> -->
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-  <header>
-    <h1>Temperature Visualizer</h1>
-  </header>
-  
-  <main>
-    <!-- Main content goes here -->
-    <div id="app">
-      <div id="main-container">
-        <div id="chart-container">
-          <h2 id="instructions">Enter the date range to visualize the temperature data</h2>
-          <canvas id="temperatureChart"></canvas>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Temperature Visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="index.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Temperature Visualizer</h1>
+    </header>
+
+    <main>
+      <div id="date-form">
+        <form id="dateForm">
+          <label for="startDate">Start Date:</label>
+          <input type="date" id="startDate" name="startDate" required />
+          <label for="endDate">End Date:</label>
+          <input type="date" id="endDate" name="endDate" required />
+          <button type="submit">Submit</button>
+        </form>
+      </div>
+      <div id="app">
+        <div id="main-container">
+          <div id="chart-container">
+            <h2 id="instructions">
+              Enter the date range to visualize the temperature data
+            </h2>
+            <canvas id="temperatureChart"></canvas>
+          </div>
+          <div id="custom-legend"></div>
         </div>
-        <div id="checkbox-container"></div>
-      </div>  
-    </div>
-    <div id="date-form">
-      <form id="dateForm">
-        <label for="startDate">Start Date:</label>
-        <input type="date" id="startDate" name="startDate" required>
-        <label for="endDate">End Date:</label>
-        <input type="date" id="endDate" name="endDate" required>
-        <button type="submit">Submit</button>
-      </form>
-    </div>
-  </main>
-  
-  <footer>
-    <p>&copy; 2024 Temperature Visualizer</p>
-  </footer>
-  
-  <!-- Link to your JS files -->
-  <script src="index.js"></script>
-</body>
+      </div>
+    </main>
+
+    <footer>
+      <p>&copy; 2024 Temperature Visualizer</p>
+    </footer>
+
+    <script src="index.js"></script>
+  </body>
 </html>
