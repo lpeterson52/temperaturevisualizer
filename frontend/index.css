@@ -1,6 +1,39 @@
 #chart-container {
     border: 1px solid #ccc;
+    margin: 10px;
     padding: 10px;
+    height: 70vh;
+}
+#temperatureChart {
     margin: 10px;
     height: 70vh;
+    width: 70vw;
+}
+#checkbox-container {
+    margin: 10px;
+    padding: 10px;
+    overflow-y: scroll;
+    max-height: 70vh;
+    max-width: 20%;
+    border: 1px solid #ccc;
+}
+
+#main-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+  width: 100vw;
+  height: 80vh; /* or 100vh if you want full height */
+  box-sizing: border-box;
+}
+
+#checkbox-container {
+  min-width: 200px; /* or whatever width you want */
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
 }

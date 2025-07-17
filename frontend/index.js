@@ -32,14 +32,14 @@ function generateTankConfigs(data){
         ['#008080', '#b3d1c6'], // Teal
         ['#e6beff', '#f3e6ff'], // Lavender
         ['#aa6e28', '#e2cfc3'], // Brown
-        ['#fffac8', '#ffffe0'], // Beige
+        ['#ff7f0e', '#ffffff'], // Vivid Orange on White (replaces Beige)
         ['#800000', '#d1b3b3'], // Maroon
         ['#aaffc3', '#e0fff7'], // Mint
         ['#808000', '#e6e6b3'], // Olive
         ['#ffd8b1', '#fff5e6'], // Apricot
         ['#000080', '#b3b3e6'], // Navy
         ['#808080', '#e6e6e6'], // Grey
-        ['#FFFFFF', '#f2f2f2'], // White
+        ['#0057e7', '#ffffff'], // Vivid Blue on White (replaces White)
         ['#000000', '#b3b3b3'], // Black
         ['#a9a9a9', '#d3d3d3'], // Dark Grey
         ['#b22222', '#f4cccc'], // Firebrick
@@ -98,6 +98,7 @@ async function displayChart(start_date, end_date){
         options: {
             animation: false,
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: true },
                 title: { display: true, text: 'Tank Temperatures Over Time' }
@@ -128,6 +129,8 @@ document.getElementById('dateForm').addEventListener('submit', function(event) {
     event.preventDefault();
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
+    const instructions = document.getElementById('instructions');
+    instructions.style.display = 'none';
     displayChart(startDate, endDate);
 });
 
@@ -135,26 +138,40 @@ document.getElementById('dateForm').addEventListener('submit', function(event) {
 function createTankCheckboxes() {
     const container = document.getElementById('checkbox-container');
     const letters = ['A', 'B', 'C', 'D'];
-    const states = ['warm', 'cool'];
     for (const letter of letters) {
         for (let i = 1; i <= 4; i++) {
-            for (const state of states) {
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.id = `tank${letter}${i}${state}`;
-                checkbox.checked = false; // or true if you want them checked by default
+            // Create a row for each tank (A1, A2, ...)
+            const row = document.createElement('div');
+            row.className = 'checkbox-row';
 
-                const label = document.createElement('label');
-                label.htmlFor = checkbox.id;
-                label.innerText = `Tank ${letter}${i} ${state.charAt(0).toUpperCase() + state.slice(1)}`;
+            // Warm
+            const warmCheckbox = document.createElement('input');
+            warmCheckbox.type = 'checkbox';
+            warmCheckbox.id = `tank${letter}${i}warm`;
+            warmCheckbox.checked = false;
 
-                // Optionally wrap in a div for styling
-                const wrapper = document.createElement('div');
-                wrapper.appendChild(checkbox);
-                wrapper.appendChild(label);
+            const warmLabel = document.createElement('label');
+            warmLabel.htmlFor = warmCheckbox.id;
+            warmLabel.innerText = `Tank ${letter}${i} Warm`;
 
-                container.appendChild(wrapper);
-            }
+            // Cool
+            const coolCheckbox = document.createElement('input');
+            coolCheckbox.type = 'checkbox';
+            coolCheckbox.id = `tank${letter}${i}cool`;
+            coolCheckbox.checked = false;
+
+            const coolLabel = document.createElement('label');
+            coolLabel.htmlFor = coolCheckbox.id;
+            coolLabel.innerText = `Tank ${letter}${i} Cool`;
+
+            // Add to row
+            row.appendChild(warmCheckbox);
+            row.appendChild(warmLabel);
+            row.appendChild(coolCheckbox);
+            row.appendChild(coolLabel);
+
+            // Add row to container
+            container.appendChild(row);
         }
     }
 }

@@ -19,8 +19,12 @@
   <main>
     <!-- Main content goes here -->
     <div id="app">
-      <div id="chart-container">
-        <canvas id="temperatureChart" width="600" height="400"></canvas>
+      <div id="main-container">
+        <div id="chart-container">
+          <h2 id="instructions">Enter the date range to visualize the temperature data</h2>
+          <canvas id="temperatureChart"></canvas>
+        </div>
+        <div id="checkbox-container"></div>
       </div>  
     </div>
     <div id="date-form">
@@ -32,7 +36,6 @@
         <button type="submit">Submit</button>
       </form>
     </div>
-    <div id="checkbox-container"></div>
   </main>
   
   <footer>
