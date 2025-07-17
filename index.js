@@ -75,58 +75,6 @@ function generateTankConfigs(data){
     return tankConfigs;
 }
 
-// Plugin to remove strikethrough from hidden legend items
-const noStrikethroughLegendPlugin = {
-  id: 'noStrikethroughLegend',
-  beforeDraw(chart) {
-    if (!chart.legend) return;
-    chart.legend.legendItems.forEach(item => {
-      item.textDecoration = ''; // Remove strikethrough
-    });
-  }
-};
-
-// Custom HTML legend for Chart.js
-function updateCustomLegend(chart) {
-    const legendContainer = document.getElementById('custom-legend');
-    if (!legendContainer) return;
-    legendContainer.innerHTML = '';
-    chart.data.datasets.forEach((dataset, i) => {
-        const legendItem = document.createElement('span');
-        legendItem.style.display = 'inline-flex';
-        legendItem.style.alignItems = 'center';
-        legendItem.style.marginRight = '16px';
-        legendItem.style.cursor = 'pointer';
-        legendItem.style.opacity = chart.isDatasetVisible(i) ? 1 : 0.5;
-
-        // Colored box (marker)
-        const colorBox = document.createElement('span');
-        colorBox.style.display = 'inline-block';
-        colorBox.style.width = '16px';
-        colorBox.style.height = '16px';
-        colorBox.style.marginRight = '6px';
-        colorBox.style.backgroundColor = dataset.backgroundColor;
-        colorBox.style.border = '3px solid ' + dataset.borderColor;
-        colorBox.style.borderRadius = '3px';
-
-        // Label text
-        const labelText = document.createElement('span');
-        labelText.id = dataset.label + 'Label';
-        labelText.textContent = dataset.label;
-        labelText.style.color = chart.isDatasetVisible(i) ? 'black' : 'gray';
-
-        legendItem.appendChild(colorBox);
-        legendItem.appendChild(labelText);
-
-        legendItem.onclick = () => {
-            chart.setDatasetVisibility(i, !chart.isDatasetVisible(i));
-            chart.update();
-            setTimeout(() => updateCustomLegend(chart), 0);
-        };
-        legendContainer.appendChild(legendItem);
-    });
-}
-
 async function displayChart(start_date, end_date){
     const data = await fetchTemperaturedata(start_date, end_date);
     const labels = data.map(entry => entry["Date-Time"]);
@@ -152,9 +100,7 @@ async function displayChart(start_date, end_date){
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false // Disable built-in legend
-                },
+                legend: { display: true },
                 title: { display: true, text: 'Tank Temperatures Over Time' }
             }
         }
@@ -176,7 +122,6 @@ async function displayChart(start_date, end_date){
         }
     }
     temperatureChart.update();
-    updateCustomLegend(temperatureChart);
 }
 
 // Date form event listener
@@ -188,3 +133,70 @@ document.getElementById('dateForm').addEventListener('submit', function(event) {
     instructions.style.display = 'none';
     displayChart(startDate, endDate);
 });
+
+// Generate checkboxes
+function createTankCheckboxes() {
+    const container = document.getElementById('checkbox-container');
+    const letters = ['A', 'B', 'C', 'D'];
+    for (const letter of letters) {
+        for (let i = 1; i <= 4; i++) {
+            // Create a row for each tank (A1, A2, ...)
+            const row = document.createElement('div');
+            row.className = 'checkbox-row';
+
+            // Warm
+            const warmCheckbox = document.createElement('input');
+            warmCheckbox.type = 'checkbox';
+            warmCheckbox.id = `tank${letter}${i}warm`;
+            warmCheckbox.checked = false;
+
+            const warmLabel = document.createElement('label');
+            warmLabel.htmlFor = warmCheckbox.id;
+            warmLabel.innerText = `Tank ${letter}${i} Warm`;
+
+            // Cool
+            const coolCheckbox = document.createElement('input');
+            coolCheckbox.type = 'checkbox';
+            coolCheckbox.id = `tank${letter}${i}cool`;
+            coolCheckbox.checked = false;
+
+            const coolLabel = document.createElement('label');
+            coolLabel.htmlFor = coolCheckbox.id;
+            coolLabel.innerText = `Tank ${letter}${i} Cool`;
+
+            // Add to row
+            row.appendChild(warmCheckbox);
+            row.appendChild(warmLabel);
+            row.appendChild(coolCheckbox);
+            row.appendChild(coolLabel);
+
+            // Add row to container
+            container.appendChild(row);
+        }
+    }
+}
+
+// Checkbox event listeners
+function addCheckboxEventListeners(){
+    const letters = ['A', 'B', 'C', 'D']
+    const states = ["warm", "cool"]
+    let dataIndex = 0;
+    for (const letter of letters) {
+        for (let i = 1; i <= 4; i++){
+            for (const state of states){
+                // Use let to create a new scope for each dataIndex
+                let currentIndex = dataIndex;
+                document.getElementById('tank' + letter + i + state).addEventListener('change', function() {
+                    console.log(`Checkbox ${this.id} changed: ${this.checked}`);
+                    if (temperatureChart) {
+                        temperatureChart.data.datasets[currentIndex].hidden = !this.checked;
+                        temperatureChart.update();
+                    }
+                });
+                dataIndex += 1;
+            }
+        }
+    }
+}
+createTankCheckboxes();
+addCheckboxEventListeners();
