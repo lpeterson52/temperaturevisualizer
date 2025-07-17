@@ -9,7 +9,7 @@
     height: 70vh;
     width: 70vw;
 }
-#checkbox-container {
+#custom-legend {
     margin: 10px;
     padding: 10px;
     overflow-y: scroll;
@@ -25,15 +25,4 @@
   width: 100vw;
   height: 80vh; /* or 100vh if you want full height */
   box-sizing: border-box;
-}
-
-#checkbox-container {
-  min-width: 200px; /* or whatever width you want */
-}
-
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
 }
