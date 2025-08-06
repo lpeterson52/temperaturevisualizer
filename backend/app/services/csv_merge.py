@@ -13,13 +13,16 @@ import httpx
 
 async def fetch_and_merge_csvs(start_date: str,
                                end_date: str,
-                               cached_file_dict: dict) -> pd.DataFrame:
+                               cached_file_dict: dict,
+                               decimate: bool) -> pd.DataFrame:
     """
     Returns a pandas dataframe containing the merged csv data
     
     Args:
         start_date: A string in the form YYYY-MM-DD.
         end_date: A string in the form YYYY-MM-DD.
+        cached_file_dict: A dictionary of the form {filename: url}
+        decimate: A boolean indicating whether to decimate the data
     Return:
         pd.DataFrame: A DataFrame containing the merged csv information.
     """
@@ -38,7 +41,10 @@ async def fetch_and_merge_csvs(start_date: str,
     sorted_dates = sorted(date_key_dict.keys())
     sorted_frames = [date_key_dict[d] for d in sorted_dates]
     print("sorted_frames:", sorted_frames)
-    return pd.concat(sorted_frames)
+    merged_df = pd.concat(sorted_frames)
+    if decimate:
+        return decimate_dataframe(merged_df, decimation_factor=10)
+    return merged_df
 
 def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[date]:
     """
@@ -101,6 +107,14 @@ async def fetch_csv(client, filename, url):
     except (httpx.HTTPError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
         print(f"Failed to fetch {filename}: {e}")
         return filename, None
+
+def decimate_dataframe(df: pd.DataFrame, decimation_factor: int) -> pd.DataFrame:
+    """
+    Decimates a dataframe to a given decimation factor.
+    """
+    if decimation_factor > 1:
+        return df.iloc[::decimation_factor]
+    return df
 
 # ------------------------------
 # ---- Conversion Functions ----

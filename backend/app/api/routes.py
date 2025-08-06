@@ -33,7 +33,10 @@ async def merge_csv(
         HTTPException: If there is an error during the CSV merge process
     """
     try:
-        merged_df = await fetch_and_merge_csvs(start_date, end_date, app.api.cache.cached_file_dict)
+        merged_df = await fetch_and_merge_csvs(start_date,
+                                               end_date,
+                                               app.api.cache.cached_file_dict,
+                                               decimate=True)
         return merged_df.reset_index(drop=True).to_dict(orient="records")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
