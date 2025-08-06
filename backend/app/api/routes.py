@@ -32,11 +32,12 @@ async def merge_csv(
     Raises:
         HTTPException: If there is an error during the CSV merge process
     """
+    decimate = start_date == end_date
     try:
-        merged_df = await fetch_and_merge_csvs(start_date,
-                                               end_date,
-                                               app.api.cache.cached_file_dict,
-                                               decimate=True)
+        merged_df = await fetch_and_merge_csvs(start_date=start_date,
+                                               end_date=end_date,
+                                               cached_file_dict=app.api.cache.cached_file_dict,
+                                               decimate=decimate)
         return merged_df.reset_index(drop=True).to_dict(orient="records")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
