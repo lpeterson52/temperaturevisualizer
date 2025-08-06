@@ -1,6 +1,15 @@
-from fastapi import APIRouter, BackgroundTasks
-import httpx
+"""
+Cache module for the temperature visualizer backend.
+
+This module contains the cached file information for the temperature visualizer backend.
+"""
+
 import asyncio
+from fastapi import APIRouter
+import httpx
+
+# Google Apps Script URL for fetching file information
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzNeJvs8VXCqja9ia-DY3lORan0-z1L-H_LonUwDnZ6_wbNsU7mS779S1AvWYIPV8oH4g/exec"
 
 router = APIRouter()
 
@@ -18,11 +27,11 @@ async def fetch_file_json():
     # set timeout to deal with long response times
     timeout = httpx.Timeout(timeout=30.0, read=30.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        result = await client.get("https://script.google.com/macros/s/AKfycbzNeJvs8VXCqja9ia-DY3lORan0-z1L-H_LonUwDnZ6_wbNsU7mS779S1AvWYIPV8oH4g/exec")
-        resultDict = result.json()
-        return resultDict
+        result = await client.get(GOOGLE_SCRIPT_URL)
+        result_dict = result.json()
+        return result_dict
 
-def get_file_dict(fileJSON):
+def get_file_dict(file_json):
     """
     Converts a JSON containing file information and changes the structure to be {name: url}
 
@@ -33,19 +42,27 @@ def get_file_dict(fileJSON):
         dict: A python dict containing file information in the form {filename: url}
     """
 
-    returnDict = {fileobject["name"]: fileobject["url"] for fileobject in fileJSON}
-    return returnDict
+    return_dict = {fileobject["name"]: fileobject["url"] for fileobject in file_json}
+    return return_dict
 
 
 async def refresh_cache():
+    """
+    Refreshes the cached file dictionary every hour.
+    """
     global cached_file_dict
     while True:
-        fileJSON = await fetch_file_json()
-        cached_file_dict = get_file_dict(fileJSON)
+        file_json = await fetch_file_json()
+        cached_file_dict = get_file_dict(file_json)
         print("Cache refreshed")
         await asyncio.sleep(3600) # refresh every hour
 
 @router.get("/")
 def get_available_files():
-    return cached_file_dict
+    """
+    Returns the cached file dictionary.
 
+    Returns:
+        dict: A python dict containing file information in the form {filename: url}
+    """
+    return cached_file_dict

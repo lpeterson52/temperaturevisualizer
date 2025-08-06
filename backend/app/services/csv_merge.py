@@ -1,13 +1,19 @@
-import pandas as pd
-from typing import List
-import httpx
-from datetime import date
+"""
+CSV merge service for the temperature visualizer backend.
+
+This module contains the functions for fetching and merging CSV files from Google Drive.
+"""
+
 import io
 import asyncio
-from app.api.cache import cached_file_dict
-# from api.cache import cached_file_dict
+from typing import List
+from datetime import date
+import pandas as pd
+import httpx
 
-async def fetch_and_merge_csvs(start_date: str, end_date: str, cached_file_dict: dict) -> pd.DataFrame:
+async def fetch_and_merge_csvs(start_date: str,
+                               end_date: str,
+                               cached_file_dict: dict) -> pd.DataFrame:
     """
     Returns a pandas dataframe containing the merged csv data
     
@@ -19,14 +25,14 @@ async def fetch_and_merge_csvs(start_date: str, end_date: str, cached_file_dict:
     """
     print("cached_file_dict keys:", list(cached_file_dict.keys()))
     print("start_date:", start_date, "end_date:", end_date)
-    datelist = get_dates_between(start_date=str_to_date(start_date), 
-                                 end_date=str_to_date(end_date), 
+    datelist = get_dates_between(start_date=str_to_date(start_date),
+                                 end_date=str_to_date(end_date),
                                  filedict=cached_file_dict)
     print("datelist:", datelist)
     fetched_frames = await fetch_csvs_from_drive(datelist=datelist, filedict=cached_file_dict)
     print("fetched_frames:", fetched_frames)
     date_key_dict = {}
-    
+
     for filename, df in fetched_frames.items():
         date_key_dict[filename_to_date(filename)] = df
     sorted_dates = sorted(date_key_dict.keys())
@@ -44,8 +50,8 @@ def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[
     Returns:
         list[date]: A list of dates between the given start date and end date inclusive.
     """
-    def is_date_between(date: date, start_date: date, end_date: date) -> bool:
-        return start_date <= date and date <= end_date
+    def is_date_between(date_obj: date, start_date: date, end_date: date) -> bool:
+        return start_date <= date_obj and date_obj <= end_date
 
     filenames = [filename for filename in filedict]
     datelist = list(map(filename_to_date, filenames))
@@ -54,7 +60,8 @@ def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[
 
 async def fetch_csvs_from_drive(datelist: List[date], filedict: dict) -> dict:
     """
-    Fetches the csvs associated with the given datelist from google drive, converts them to pandas dataframes and returns a dictionary.
+    Fetches the csvs associated with the given datelist from google drive, 
+    converts them to pandas dataframes and returns a dictionary.
 
     Args:
         datelist: A list of dates to be fetched from google drive
@@ -70,7 +77,7 @@ async def fetch_csvs_from_drive(datelist: List[date], filedict: dict) -> dict:
         # create task list for asyncio.gather
         for filename in filelist:
             tasklist.append(fetch_csv(client, filename, filedict[filename]))
-        
+
         results = await asyncio.gather(*tasklist, return_exceptions=True)
 
         # if result is valid, append it to dataframe dictionary
@@ -78,17 +85,20 @@ async def fetch_csvs_from_drive(datelist: List[date], filedict: dict) -> dict:
             if isinstance(result, tuple) and result[1] is not None:
                 filename, df = result
                 dataframes[filename] = df
-    
+
     return dataframes
-   
+
 
 async def fetch_csv(client, filename, url):
+    """
+    Fetches a csv from google drive and returns a dataframe.
+    """
     try:
         response = await client.get(url)
         response.raise_for_status()
         df = pd.read_csv(io.StringIO(response.text))
         return filename, df
-    except Exception as e:
+    except (httpx.HTTPError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
         print(f"Failed to fetch {filename}: {e}")
         return filename, None
 
@@ -120,12 +130,15 @@ def str_to_date(datestr: str) -> date:
     split_str = list(map(int, split_str))
     return date(split_str[0], split_str[1], split_str[2])
 
-def date_to_filename(date: date) -> str:
-    yearstr = str(date.year)
-    monthstr = str(date.month)
-    daystr = str(date.day) 
-    if date.month < 10:
+def date_to_filename(date_obj: date) -> str:
+    """
+    Converts a date object to a filename of the form D_YYYY-MM-DD.csv
+    """
+    yearstr = str(date_obj.year)
+    monthstr = str(date_obj.month)
+    daystr = str(date_obj.day)
+    if date_obj.month < 10:
         monthstr = "0" + monthstr
-    if date.day < 10:
+    if date_obj.day < 10:
         daystr = "0" + daystr
     return "D_" + yearstr + "-" + monthstr + "-" + daystr + ".csv"
