@@ -26,21 +26,16 @@ async def fetch_and_merge_csvs(start_date: str,
     Return:
         pd.DataFrame: A DataFrame containing the merged csv information.
     """
-    print("cached_file_dict keys:", list(cached_file_dict.keys()))
-    print("start_date:", start_date, "end_date:", end_date)
     datelist = get_dates_between(start_date=str_to_date(start_date),
                                  end_date=str_to_date(end_date),
                                  filedict=cached_file_dict)
-    print("datelist:", datelist)
     fetched_frames = await fetch_csvs_from_drive(datelist=datelist, filedict=cached_file_dict)
-    print("fetched_frames:", fetched_frames)
     date_key_dict = {}
 
     for filename, df in fetched_frames.items():
         date_key_dict[filename_to_date(filename)] = df
     sorted_dates = sorted(date_key_dict.keys())
     sorted_frames = [date_key_dict[d] for d in sorted_dates]
-    print("sorted_frames:", sorted_frames)
     merged_df = pd.concat(sorted_frames)
     if decimate:
         return decimate_dataframe(merged_df, decimation_factor=10)
