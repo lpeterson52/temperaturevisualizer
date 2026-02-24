@@ -6,11 +6,64 @@ This module contains the functions for fetching and merging CSV files from Googl
 
 import io
 import asyncio
+import uuid
 from typing import List
 from datetime import date
+from app.api.cache import get_available_files
 from app.services.clean_csv import sanitize_nan_vals
 import pandas as pd
 import httpx
+
+# Dictionary to store jobs
+jobs = {}
+
+async def create_merge_job(start_date: str, end_date: str) -> dict:
+    """
+    Returns:
+        job_id: dict representing job id {"job_id": job_id}
+    """
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {
+        "status": "queued", 
+        "progress": 0,
+        "result": None,
+        "error": None
+    }
+    
+    asyncio.create_task(run_merge_job(job_id, start_date, end_date))
+    return {"job_id": job_id}
+    
+async def run_merge_job(job_id: str, start_date: str, end_date: str) -> None:
+    try:
+        jobs[job_id]["status"] = "running"
+        jobs[job_id]["progress"] = 10
+        
+        decimate = start_date == end_date
+        
+        jobs[job_id]["progress"] = 30
+        cached_file_dict = get_available_files()
+        merged_df = await fetch_and_merge_csvs(
+            start_date=start_date,
+            end_date=end_date,
+            cached_file_dict=cached_file_dict,
+            decimate=decimate
+        )
+
+        jobs[job_id]["progress"] = 90
+        
+        merged_df = merged_df.reset_index(drop=True).to_dict(orient="records")
+        
+        jobs[job_id]["status"] = "complete"
+        jobs[job_id]["progress"] = 100
+        jobs[job_id]["result"] = merged_df
+        print("finished job with id", job_id)
+        
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+        print("failed job with id", job_id)
+        
+
 
 async def fetch_and_merge_csvs(start_date: str,
                                end_date: str,
@@ -69,6 +122,7 @@ async def fetch_csvs_from_drive(datelist: List[date], filedict: dict) -> dict:
     Args:
         datelist: A list of dates to be fetched from google drive
         filedict: A dictionary of the form {filename: url}
+        
     Returns:
         dict: A dictionary with filenames as keys and DataFrames as values {filename: DataFrame}
     """

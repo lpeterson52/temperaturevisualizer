@@ -115,6 +115,7 @@ async def test_live_fetch_from_google_drive():
     print("fetched")
     df = await csv_merge.fetch_and_merge_csvs(start_date=start_date, 
                                               end_date=end_date, 
-                                              cached_file_dict=filedict)
+                                              cached_file_dict=filedict,
+                                              decimate=True)
 
     assert not df.empty
