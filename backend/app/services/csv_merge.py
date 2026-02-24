@@ -19,6 +19,12 @@ jobs = {}
 
 async def create_merge_job(start_date: str, end_date: str) -> dict:
     """
+    Starts a job which merges the csvs between the given start and end date (inclusive).
+    
+    Args:
+        start_date (str): start of date range to be merged.
+        end_date (str): end of date range to be merged.
+        
     Returns:
         job_id: dict representing job id {"job_id": job_id}
     """
@@ -34,6 +40,7 @@ async def create_merge_job(start_date: str, end_date: str) -> dict:
     return {"job_id": job_id}
     
 async def run_merge_job(job_id: str, start_date: str, end_date: str) -> None:
+    
     try:
         jobs[job_id]["status"] = "running"
         jobs[job_id]["progress"] = 10
@@ -56,7 +63,7 @@ async def run_merge_job(job_id: str, start_date: str, end_date: str) -> None:
         jobs[job_id]["status"] = "complete"
         jobs[job_id]["progress"] = 100
         jobs[job_id]["result"] = merged_df
-        print("finished job with id", job_id)
+        print("Finished job with id", job_id)
         
     except Exception as e:
         jobs[job_id]["status"] = "failed"
