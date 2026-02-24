@@ -8,6 +8,7 @@ import io
 import asyncio
 from typing import List
 from datetime import date
+from app.services.clean_csv import sanitize_nan_vals
 import pandas as pd
 import httpx
 
@@ -37,9 +38,10 @@ async def fetch_and_merge_csvs(start_date: str,
     sorted_dates = sorted(date_key_dict.keys())
     sorted_frames = [date_key_dict[d] for d in sorted_dates]
     merged_df = pd.concat(sorted_frames)
+    cleaned_df = sanitize_nan_vals(merged_df)
     if decimate:
-        return decimate_dataframe(merged_df, decimation_factor=10)
-    return merged_df
+        return decimate_dataframe(cleaned_df, decimation_factor=10)
+    return cleaned_df
 
 def get_dates_between(start_date: date, end_date: date, filedict: dict) -> List[date]:
     """

@@ -94,7 +94,7 @@ async def test_fetch_and_merge_csvs():
         return_value=httpx.Response(200, content=csv_2025_07_04)
     )
 
-    df = await csv_merge.fetch_and_merge_csvs("2025-07-03", "2025-07-04", mock_dict)
+    df = await csv_merge.fetch_and_merge_csvs("2025-07-03", "2025-07-04", mock_dict, False)
 
     assert isinstance(df, pd.DataFrame)
     assert not df.empty
