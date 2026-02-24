@@ -156,6 +156,15 @@ async function displayChart(start_date, end_date){
                     display: false // Disable built-in legend
                 },
                 title: { display: true, text: 'Tank Temperatures Over Time' }
+            },
+            scales: {
+                y: {
+                    ticks: { // adding units to y axis
+                        callback: function(value, index, ticks) {
+                            return value + ' °C';
+                        }
+                    }
+                }
             }
         }
     });
