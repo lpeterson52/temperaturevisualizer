@@ -3,10 +3,18 @@ import FetchJob from './fetchJob.js'
 
 const DEBUG = true;
 // Define API url
-const apiUrl = DEBUG ? "http://localhost:8000/api" : "https://temperaturevisualizer.onrender.com/api";
+const backendUrl = "https://temperaturevisualizer.onrender.com/";
+const apiUrl = DEBUG ? "http://localhost:8000/api" : backendUrl + "api";
 
 // Global chart variable
 let temperatureChart = null;
+
+function wakeupServer() {
+    if (DEBUG) return;
+    fetch(backendUrl);
+}
+
+wakeupServer();
 
 function generateTankConfigs(data){
     const tankConfigs = [];
