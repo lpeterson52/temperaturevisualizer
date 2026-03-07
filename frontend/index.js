@@ -188,22 +188,6 @@ async function displayChart(startDate, endDate){
 
 async function pollJobStatus(fetchJob, interval = 800) {
     const chartContainer = document.getElementById('chart-container');
-    if (!chartContainer) {
-        // nothing to update visually; just poll until done
-        return new Promise((resolve, reject) => {
-            const poll = async () => {
-                try {
-                    const statusObj = await fetchJob.getStatus();
-                    if (statusObj.status === 'complete') return resolve();
-                    if (statusObj.status === 'failed') return reject(new Error(statusObj.error || 'Job failed'));
-                    setTimeout(poll, interval);
-                } catch (err) {
-                    setTimeout(poll, interval);
-                }
-            };
-            poll();
-        });
-    }
 
     // create progress UI under the chart if missing
     let container = document.getElementById('merge-progress-container');
