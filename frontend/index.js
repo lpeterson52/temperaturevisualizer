@@ -1,20 +1,20 @@
+import FetchJob from './fetchJob.js'
+
+
+const DEBUG = true;
 // Define API url
-const apiUrl = "https://temperaturevisualizer.onrender.com/api"
-    
+const backendUrl = "https://temperaturevisualizer.onrender.com/";
+const apiUrl = DEBUG ? "http://localhost:8000/api" : backendUrl + "api";
+
 // Global chart variable
 let temperatureChart = null;
 
-async function fetchTemperaturedata(start_date, end_date){
-    const response = await fetch(`${apiUrl}?start_date=${start_date}&end_date=${end_date}`);
-    const data = await response.json();
-    
-    // Debug: Check what we're getting
-    console.log('Data type:', typeof data);
-    console.log('Data:', data);
-    console.log('Is array?', Array.isArray(data));
-    
-    return data;
+function wakeupServer() {
+    if (DEBUG) return;
+    fetch(backendUrl);
 }
+
+wakeupServer();
 
 function generateTankConfigs(data){
     const tankConfigs = [];
@@ -75,17 +75,6 @@ function generateTankConfigs(data){
     return tankConfigs;
 }
 
-// Plugin to remove strikethrough from hidden legend items
-const noStrikethroughLegendPlugin = {
-  id: 'noStrikethroughLegend',
-  beforeDraw(chart) {
-    if (!chart.legend) return;
-    chart.legend.legendItems.forEach(item => {
-      item.textDecoration = ''; // Remove strikethrough
-    });
-  }
-};
-
 // Custom HTML legend for Chart.js
 function updateCustomLegend(chart) {
     const legendContainer = document.getElementById('custom-legend');
@@ -127,8 +116,25 @@ function updateCustomLegend(chart) {
     });
 }
 
-async function displayChart(start_date, end_date){
-    const data = await fetchTemperaturedata(start_date, end_date);
+async function displayChart(startDate, endDate){
+    // Start merge job and poll for progress before rendering chart
+    const job = new FetchJob(startDate, endDate, apiUrl);
+    await job.startFetchJob();
+
+    try {
+        await pollJobStatus(job, 800);
+    } catch (err) {
+        console.error('Merge job failed', err);
+        const instructions = document.getElementById('instructions');
+        if (instructions) {
+            instructions.style.display = 'block';
+            instructions.textContent = 'Failed to merge data: ' + (err.message || err);
+        }
+        return;
+    }
+
+    // Once complete, fetch the data and display the chart
+    const { result: data } = await job.fetchResult();
     const labels = data.map(entry => entry["Date-Time"]);
 
     const tankConfigs = generateTankConfigs(data);
@@ -186,6 +192,67 @@ async function displayChart(start_date, end_date){
     }
     temperatureChart.update();
     updateCustomLegend(temperatureChart);
+}
+
+async function pollJobStatus(fetchJob, interval = 800) {
+    const chartContainer = document.getElementById('chart-container');
+
+    // create progress UI under the chart if missing
+    let container = document.getElementById('merge-progress-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'merge-progress-container';
+        container.style.width = '100%';
+        container.style.boxSizing = 'border-box';
+        container.style.marginTop = '12px';
+        container.style.height = '12px';
+        container.style.background = '#f2f2f2';
+        container.style.borderRadius = '6px';
+        container.style.overflow = 'hidden';
+        const bar = document.createElement('div');
+        bar.id = 'merge-progress-bar';
+        bar.style.height = '100%';
+        bar.style.width = '0%';
+        bar.style.background = '#3cb44b';
+        bar.style.transition = 'width 400ms linear';
+        container.appendChild(bar);
+        chartContainer.appendChild(container);
+    }
+
+    const progressBar = document.getElementById('merge-progress-bar');
+
+    return new Promise((resolve, reject) => {
+        const poll = async () => {
+            try {
+                const statusObj = await fetchJob.getStatus();
+                const progress = typeof statusObj.progress === 'number' ? statusObj.progress : 0;
+                progressBar.style.width = Math.min(100, progress) + '%';
+
+                if (statusObj.status === 'complete') {
+                    progressBar.style.width = '100%';
+                    setTimeout(() => {
+                        const c = document.getElementById('merge-progress-container');
+                        if (c) c.remove();
+                        resolve();
+                    }, 300);
+                    return;
+                }
+
+                if (statusObj.status === 'failed') {
+                    const c = document.getElementById('merge-progress-container');
+                    if (c) c.remove();
+                    return reject(new Error(statusObj.error || 'Job failed'));
+                }
+
+                setTimeout(poll, interval);
+            } catch (err) {
+                // transient error: retry after interval
+                console.warn('pollJobStatus error, retrying', err);
+                setTimeout(poll, interval);
+            }
+        };
+        poll();
+    });
 }
 
 // Date form event listener
