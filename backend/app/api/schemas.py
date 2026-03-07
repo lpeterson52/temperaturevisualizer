@@ -19,25 +19,40 @@ class MergeStatusResponse(BaseModel):
         json_schema_extra = {
             "example": {"status": "running", "progress": 30.0, "error": None}
         }
-        
 
-# TODO: Fix the response model to not conflict with existing formatting
-class MergeResultResponse(RootModel[Dict[str, Any]]):
-    pass
+
+class MergeResultResponse(BaseModel):
+    result: List[Dict[str, Any]] = Field(..., description="The merged result of the csvs as a list of dictionaries", example=[
+        {
+            "Date-Time": "02/22/2026 00:00:36",
+            "Timecode": 46075.0004252315,
+            "Tank A1 Warm (C)": 14.6496,
+            "Tank A1 Cool (C)": 14.804
+        },
+        {
+            "Date-Time": "02/22/2026 00:10:36",
+            "Timecode": 46075.0073702431,
+            "Tank A1 Warm (C)": 14.6299,
+            "Tank A1 Cool (C)": 14.7249
+        }
+    ])
+
     class Config:
         json_schema_extra = {
-            "example": [
-                {
-                    "Date-Time": "02/22/2026 00:00:36",
-                    "Timecode": 46075.0004252315,
-                    "Tank A1 Warm (C)": 14.6496,
-                    "Tank A1 Cool (C)": 14.804
-                },
-                {
-                    "Date-Time": "02/22/2026 00:10:36",
-                    "Timecode": 46075.0073702431,
-                    "Tank A1 Warm (C)": 14.6299,
-                    "Tank A1 Cool (C)": 14.7249
-                }
-            ]
+            "example": {
+                "result": [
+                    {
+                        "Date-Time": "02/22/2026 00:00:36",
+                        "Timecode": 46075.0004252315,
+                        "Tank A1 Warm (C)": 14.6496,
+                        "Tank A1 Cool (C)": 14.804
+                    },
+                    {
+                        "Date-Time": "02/22/2026 00:10:36",
+                        "Timecode": 46075.0073702431,
+                        "Tank A1 Warm (C)": 14.6299,
+                        "Tank A1 Cool (C)": 14.7249
+                    }
+                ]
+            }
         }

@@ -126,7 +126,7 @@ async function displayChart(startDate, endDate){
     }
 
     // Once complete, fetch the data and display the chart
-    const data = await job.fetchResult();
+    const { result: data } = await job.fetchResult();
     const labels = data.map(entry => entry["Date-Time"]);
 
     const tankConfigs = generateTankConfigs(data);

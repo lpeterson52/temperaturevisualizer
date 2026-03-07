@@ -61,7 +61,7 @@ async def get_merge_status(
     
     return MergeStatusResponse(status=job["status"], progress=job["progress"], error=job["error"])
 
-@router.get("/merge-result")
+@router.get("/merge-result", response_model=MergeResultResponse)
 async def get_merge_result(
     job_id: str = Query(..., description="Job id in string format")
 ):
@@ -84,4 +84,4 @@ async def get_merge_result(
     if job["status"] != "complete":
         raise HTTPException(status_code=409, detail="Job is not complete yet")
     
-    return job["result"]
+    return MergeResultResponse(result=job["result"])
