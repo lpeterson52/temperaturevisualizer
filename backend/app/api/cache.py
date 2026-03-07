@@ -6,6 +6,7 @@ This module contains the cached file information for the temperature visualizer 
 
 import asyncio
 from fastapi import APIRouter
+from typing import Dict
 import httpx
 
 # Google Apps Script URL for fetching file information
@@ -16,7 +17,7 @@ router = APIRouter()
 cached_file_dict = {}
 # dict struct: {filename: url}
 
-@router.get("/")
+@router.get("/", response_model=Dict[str, str])
 def get_available_files():
     """
     Returns the cached file dictionary.

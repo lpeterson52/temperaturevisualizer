@@ -7,8 +7,8 @@ it easier for clients to understand and use the API effectively.
 
 """
 
-from pydantic import BaseModel, Field, RootModel
-from typing import Optional, Any, Dict, List, TypeAlias
+from pydantic import BaseModel, Field
+from typing import Optional, Any, Dict, List
 
 
 class JobIDResponse(BaseModel):

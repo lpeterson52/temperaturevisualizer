@@ -8,8 +8,7 @@ based on date ranges.
 
 from fastapi import APIRouter, HTTPException, Query
 import app.services.csv_merge
-import app.api.cache
-from app.api.schemas import JobIDResponse, MergeStatusResponse, MergeResultResponse
+from app.api.merge_schemas import JobIDResponse, MergeStatusResponse, MergeResultResponse
 import pandas as pd  # noqa: F401
 import logging
 
