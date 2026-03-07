@@ -1,22 +1,12 @@
 import FetchJob from './fetchJob.js'
 
+
+const DEBUG = true;
 // Define API url
-const apiUrl = "https://temperaturevisualizer.onrender.com/api";
-    
+const apiUrl = DEBUG ? "http://localhost:8000/api" : "https://temperaturevisualizer.onrender.com/api";
+
 // Global chart variable
 let temperatureChart = null;
-
-async function fetchTemperaturedata(start_date, end_date){
-    const response = await fetch(`${apiUrl}?start_date=${start_date}&end_date=${end_date}`);
-    const data = await response.json();
-    
-    // Debug: Check what we're getting
-    console.log('Data type:', typeof data);
-    console.log('Data:', data);
-    console.log('Is array?', Array.isArray(data));
-    
-    return data;
-}
 
 function generateTankConfigs(data){
     const tankConfigs = [];
@@ -76,17 +66,6 @@ function generateTankConfigs(data){
     }
     return tankConfigs;
 }
-
-// Plugin to remove strikethrough from hidden legend items
-const noStrikethroughLegendPlugin = {
-  id: 'noStrikethroughLegend',
-  beforeDraw(chart) {
-    if (!chart.legend) return;
-    chart.legend.legendItems.forEach(item => {
-      item.textDecoration = ''; // Remove strikethrough
-    });
-  }
-};
 
 // Custom HTML legend for Chart.js
 function updateCustomLegend(chart) {
