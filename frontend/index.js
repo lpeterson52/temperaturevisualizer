@@ -1,5 +1,7 @@
+import FetchJob from './fetchJob.js'
+
 // Define API url
-const apiUrl = "https://temperaturevisualizer.onrender.com/api"
+const apiUrl = "https://temperaturevisualizer.onrender.com/api";
     
 // Global chart variable
 let temperatureChart = null;
@@ -127,8 +129,25 @@ function updateCustomLegend(chart) {
     });
 }
 
-async function displayChart(start_date, end_date){
-    const data = await fetchTemperaturedata(start_date, end_date);
+async function displayChart(startDate, endDate){
+    // Start merge job and poll for progress before rendering chart
+    const job = new FetchJob(startDate, endDate, apiUrl);
+    await job.startFetchJob();
+
+    try {
+        await pollJobStatus(job, 800);
+    } catch (err) {
+        console.error('Merge job failed', err);
+        const instructions = document.getElementById('instructions');
+        if (instructions) {
+            instructions.style.display = 'block';
+            instructions.textContent = 'Failed to merge data: ' + (err.message || err);
+        }
+        return;
+    }
+
+    // Once complete, fetch the data and display the chart
+    const data = await job.fetchResult();
     const labels = data.map(entry => entry["Date-Time"]);
 
     const tankConfigs = generateTankConfigs(data);
@@ -186,6 +205,83 @@ async function displayChart(start_date, end_date){
     }
     temperatureChart.update();
     updateCustomLegend(temperatureChart);
+}
+
+async function pollJobStatus(fetchJob, interval = 800) {
+    const chartContainer = document.getElementById('chart-container');
+    if (!chartContainer) {
+        // nothing to update visually; just poll until done
+        return new Promise((resolve, reject) => {
+            const poll = async () => {
+                try {
+                    const statusObj = await fetchJob.getStatus();
+                    if (statusObj.status === 'complete') return resolve();
+                    if (statusObj.status === 'failed') return reject(new Error(statusObj.error || 'Job failed'));
+                    setTimeout(poll, interval);
+                } catch (err) {
+                    setTimeout(poll, interval);
+                }
+            };
+            poll();
+        });
+    }
+
+    // create progress UI under the chart if missing
+    let container = document.getElementById('merge-progress-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'merge-progress-container';
+        container.style.width = '100%';
+        container.style.boxSizing = 'border-box';
+        container.style.marginTop = '12px';
+        container.style.height = '12px';
+        container.style.background = '#f2f2f2';
+        container.style.borderRadius = '6px';
+        container.style.overflow = 'hidden';
+        const bar = document.createElement('div');
+        bar.id = 'merge-progress-bar';
+        bar.style.height = '100%';
+        bar.style.width = '0%';
+        bar.style.background = '#3cb44b';
+        bar.style.transition = 'width 400ms linear';
+        container.appendChild(bar);
+        chartContainer.appendChild(container);
+    }
+
+    const progressBar = document.getElementById('merge-progress-bar');
+
+    return new Promise((resolve, reject) => {
+        const poll = async () => {
+            try {
+                const statusObj = await fetchJob.getStatus();
+                const progress = typeof statusObj.progress === 'number' ? statusObj.progress : 0;
+                progressBar.style.width = Math.min(100, progress) + '%';
+
+                if (statusObj.status === 'complete') {
+                    progressBar.style.width = '100%';
+                    setTimeout(() => {
+                        const c = document.getElementById('merge-progress-container');
+                        if (c) c.remove();
+                        resolve();
+                    }, 300);
+                    return;
+                }
+
+                if (statusObj.status === 'failed') {
+                    const c = document.getElementById('merge-progress-container');
+                    if (c) c.remove();
+                    return reject(new Error(statusObj.error || 'Job failed'));
+                }
+
+                setTimeout(poll, interval);
+            } catch (err) {
+                // transient error: retry after interval
+                console.warn('pollJobStatus error, retrying', err);
+                setTimeout(poll, interval);
+            }
+        };
+        poll();
+    });
 }
 
 // Date form event listener
