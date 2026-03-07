@@ -9,12 +9,16 @@ based on date ranges.
 from fastapi import APIRouter, HTTPException, Query
 import app.services.csv_merge
 import app.api.cache
+from app.api.schemas import JobIDResponse, MergeStatusResponse, MergeResultResponse
 import pandas as pd  # noqa: F401
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.post("/start-merge")
+@router.post("/start-merge", response_model=JobIDResponse)
 async def start_merge_job(
     start_date: str = Query(..., description="Start date in format YYYY-MM-DD"),
     end_date: str = Query(..., description="End date in format YYYY-MM-DD")
@@ -30,11 +34,11 @@ async def start_merge_job(
         job_id: Id of the job that was created
     """
     job_id = await app.services.csv_merge.create_merge_job(start_date, end_date)
-    print("Created job with id", job_id["job_id"])
-    return job_id
+    logger.info("Created job with id %s", job_id["job_id"])
+    return JobIDResponse(job_id=job_id["job_id"])
 
 
-@router.get("/merge-status")
+@router.get("/merge-status", response_model=MergeStatusResponse)
 async def get_merge_status(
     job_id: str = Query(..., description="Job id in string format")
 ):
@@ -55,11 +59,7 @@ async def get_merge_status(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    return {
-        "status": job["status"],
-        "progress": job["progress"],
-        "error": job["error"]
-    }
+    return MergeStatusResponse(status=job["status"], progress=job["progress"], error=job["error"])
 
 @router.get("/merge-result")
 async def get_merge_result(
