@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('tv-theme') || 'dark');</script>
     <title>Temperature Visualizer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -38,7 +39,10 @@
             </button>
           </div>
         </form>
-      </div>
+          <button id="theme-toggle" title="Toggle light/dark mode" aria-label="Toggle theme">
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span>
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☀️</span>
+          </button>
     </header>
 
     <main>

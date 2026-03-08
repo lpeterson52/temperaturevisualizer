@@ -1115,3 +1115,11 @@ document.getElementById('startDate').addEventListener('change', function() {
     const endInput = document.getElementById('endDate');
     if (!endInput.value) endInput.value = this.value;
 });
+
+// ─── Theme toggle ──────────────────────────────────────────────────────────
+document.getElementById('theme-toggle')?.addEventListener('click', () => {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('tv-theme', next);
+});
