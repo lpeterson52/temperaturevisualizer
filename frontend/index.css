@@ -1,31 +1,479 @@
+/* ─── CSS Reset & Variables ────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:           #0f1117;
+  --surface:      #1a1d27;
+  --surface-2:    #22263a;
+  --border:       rgba(255,255,255,0.08);
+  --accent:       #4f8ef7;
+  --accent-dim:   rgba(79,142,247,0.15);
+  --accent-glow:  rgba(79,142,247,0.35);
+  --green:        #3cb44b;
+  --red:          #e6194b;
+  --yellow:       #f5c518;
+  --text-primary: #eaedf4;
+  --text-secondary: #8b92a8;
+  --text-muted:   #555d75;
+  --radius:       12px;
+  --radius-sm:    8px;
+  --shadow:       0 4px 24px rgba(0,0,0,0.5);
+  --shadow-sm:    0 2px 8px rgba(0,0,0,0.3);
+  --transition:   0.2s ease;
+  --font:         'Inter', system-ui, sans-serif;
+}
+
+/* ─── Base ─────────────────────────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
 body {
-    font-family: 'Inter', sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
 }
-#chart-container {
-    border: 1px solid #ccc;
-    margin: 10px;
-    padding: 10px;
-    height: 70vh;
+
+/* ─── Header ───────────────────────────────────────────────────────────── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-#temperatureChart {
-    margin: 10px;
-    height: 70vh;
-    width: 70vw;
+
+.header-inner {
+  max-width: 1800px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+  padding: 14px 0;
 }
-#custom-legend {
-    margin: 10px;
-    padding: 10px;
-    overflow-y: scroll;
-    max-height: 70vh;
-    max-width: 20%;
-    border: 1px solid #ccc;
+
+header h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* ─── Form ─────────────────────────────────────────────────────────────── */
+#dateForm {
+  flex: 1;
+}
+
+.form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-group label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.field-group input[type="date"] {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  color-scheme: dark;
+}
+
+.field-group input[type="date"]:hover {
+  border-color: rgba(255,255,255,0.2);
+}
+
+.field-group input[type="date"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+#submitBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 9px 20px;
+  cursor: pointer;
+  transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
+  white-space: nowrap;
+}
+
+#submitBtn:hover {
+  background: #6aa0ff;
+  box-shadow: 0 0 18px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+#submitBtn:active {
+  transform: translateY(0);
+}
+
+#submitBtn .btn-icon {
+  font-size: 1rem;
+  transition: transform var(--transition);
+}
+
+#submitBtn:hover .btn-icon {
+  transform: translateX(3px);
+}
+
+/* ─── Main ─────────────────────────────────────────────────────────────── */
+main {
+  flex: 1;
+  padding: 20px 24px;
+  max-width: 1800px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ─── Instructions Banner ──────────────────────────────────────────────── */
+.instructions-banner {
+  background: rgba(229,57,53,0.12);
+  border: 1px solid rgba(229,57,53,0.35);
+  border-radius: var(--radius-sm);
+  color: #ef5350;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+}
+
+/* ─── App Layout ───────────────────────────────────────────────────────── */
+#app {
+  width: 100%;
 }
 
 #main-container {
   display: flex;
   align-items: flex-start;
-  gap: 32px;
-  width: 100vw;
-  height: 80vh; /* or 100vh if you want full height */
+  gap: 16px;
+  width: 100%;
+}
+
+/* ─── Chart Wrapper ────────────────────────────────────────────────────── */
+#chart-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Chart Toolbar ────────────────────────────────────────────────────── */
+#chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hint-text {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hint-text span {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#reset-zoom-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+  white-space: nowrap;
+}
+
+#reset-zoom-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* ─── Chart Container ──────────────────────────────────────────────────── */
+#chart-container {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  height: 65vh;
+  min-height: 340px;
+  box-shadow: var(--shadow);
+}
+
+#temperatureChart,
+#overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#overlay-canvas {
+  pointer-events: none; /* let chart receive events; JS will selectively enable */
+  z-index: 10;
+}
+
+/* ─── Empty State ──────────────────────────────────────────────────────── */
+#empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#empty-state .empty-icon {
+  font-size: 3rem;
+  opacity: 0.25;
+}
+
+#empty-state p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  text-align: center;
+  max-width: 280px;
+}
+
+/* ─── Marker Bar ───────────────────────────────────────────────────────── */
+#marker-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 0.82rem;
+}
+
+.marker-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.marker-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.marker-dot.marker-a { background: var(--yellow); }
+.marker-dot.marker-b { background: #4fc3f7; }
+
+.marker-delta {
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: auto;
+}
+
+#clear-markers-btn {
+  background: none;
+  border: 1px solid rgba(229,57,53,0.35);
+  border-radius: var(--radius-sm);
+  color: #ef5350;
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background var(--transition);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+#clear-markers-btn:hover {
+  background: rgba(229,57,53,0.1);
+}
+
+/* ─── Crosshair Tooltip ────────────────────────────────────────────────── */
+#crosshair-tooltip {
+  position: absolute;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 20;
+  box-shadow: var(--shadow-sm);
+  transform: translateX(-50%);
+  display: none;
+}
+
+/* ─── Progress Bar ─────────────────────────────────────────────────────── */
+#merge-progress-container {
+  width: 100%;
   box-sizing: border-box;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 15;
+}
+
+#merge-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  transition: width 400ms linear;
+}
+
+/* ─── Custom Legend ────────────────────────────────────────────────────── */
+#custom-legend {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-y: auto;
+  max-height: calc(65vh + 8px + 40px);
+  min-height: 100px;
+  padding: 8px 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+#custom-legend::-webkit-scrollbar {
+  width: 5px;
+}
+#custom-legend::-webkit-scrollbar-track {
+  background: transparent;
+}
+#custom-legend::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border-radius: 3px;
+}
+
+/* legend items — set by JS, but add base styles */
+#custom-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  transition: background var(--transition), color var(--transition);
+  user-select: none;
+}
+
+#custom-legend .legend-item:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+#custom-legend .legend-item.active {
+  color: var(--text-primary);
+}
+
+/* ─── Footer ───────────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 14px 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  #main-container {
+    flex-direction: column;
+  }
+  #custom-legend {
+    width: 100%;
+    max-height: 200px;
+  }
+  #chart-container {
+    height: 55vw;
+    min-height: 260px;
+  }
+}
+
+@media (max-width: 600px) {
+  header { padding: 0 14px; }
+  main { padding: 12px 14px; }
+  .header-inner { gap: 12px; }
+  header h1 { font-size: 1rem; }
+  .form-row { gap: 8px; }
+  #chart-container {
+    height: 70vw;
+    min-height: 220px;
+  }
 }

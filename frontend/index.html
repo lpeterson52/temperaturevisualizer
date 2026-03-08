@@ -12,30 +12,72 @@
     />
     <link rel="stylesheet" href="index.css" />
     <link rel="icon" href="favicon.ico" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js v4 + zoom plugin v2 (requires hammerjs for pinch) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   </head>
   <body>
     <header>
-      <h1>Temperature Visualizer</h1>
+      <div class="header-inner">
+        <h1>Temperature Visualizer</h1>
+        <form id="dateForm">
+          <div class="form-row">
+            <div class="field-group">
+              <label for="startDate">Start Date</label>
+              <input type="date" id="startDate" name="startDate" required />
+            </div>
+            <div class="field-group">
+              <label for="endDate">End Date</label>
+              <input type="date" id="endDate" name="endDate" required />
+            </div>
+            <button type="submit" id="submitBtn">
+              <span class="btn-text">Load Data</span>
+              <span class="btn-icon">→</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </header>
 
     <main>
-      <div id="date-form">
-        <form id="dateForm">
-          <label for="startDate">Start Date:</label>
-          <input type="date" id="startDate" name="startDate" required />
-          <label for="endDate">End Date:</label>
-          <input type="date" id="endDate" name="endDate" required />
-          <button type="submit">Submit</button>
-        </form>
-      </div>
+      <p id="instructions" class="instructions-banner" style="display:none;"></p>
+
       <div id="app">
         <div id="main-container">
-          <div id="chart-container">
-            <h2 id="instructions">
-              Enter the date range to visualize the temperature data
-            </h2>
-            <canvas id="temperatureChart"></canvas>
+          <div id="chart-wrapper">
+            <div id="chart-toolbar">
+              <div class="hint-text">
+                <span>🖱️ Scroll to zoom</span>
+                <span>🖱 Drag to pan</span>
+                <span>📍 Click to drop marker</span>
+              </div>
+              <button id="reset-zoom-btn" title="Reset zoom">Reset Zoom</button>
+            </div>
+            <div id="chart-container">
+              <div id="empty-state">
+                <div class="empty-icon">📈</div>
+                <p>Enter a date range to visualize temperature data</p>
+              </div>
+              <canvas id="temperatureChart"></canvas>
+              <!-- Crosshair + marker overlay -->
+              <canvas id="overlay-canvas"></canvas>
+            </div>
+            <!-- Marker info bar -->
+            <div id="marker-bar" style="display:none;">
+              <div class="marker-info" id="marker-a-info">
+                <span class="marker-dot marker-a"></span>
+                <span id="marker-a-label">Marker A: —</span>
+              </div>
+              <div class="marker-info" id="marker-b-info" style="display:none;">
+                <span class="marker-dot marker-b"></span>
+                <span id="marker-b-label">Marker B: —</span>
+              </div>
+              <div class="marker-info marker-delta" id="marker-delta" style="display:none;">
+                <span>Δt: </span><span id="marker-delta-label">—</span>
+              </div>
+              <button id="clear-markers-btn" title="Clear markers">✕ Clear</button>
+            </div>
           </div>
           <div id="custom-legend"></div>
         </div>
@@ -43,7 +85,7 @@
     </main>
 
     <footer>
-      <p>&copy; 2025 Temperature Visualizer</p>
+      <p>&copy; 2026 Temperature Visualizer</p>
     </footer>
 
     <script type="module" src="index.js"></script>
