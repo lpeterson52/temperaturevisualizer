@@ -16,7 +16,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  </head>
+      </head>
   <body>
     <header>
       <div class="header-inner">
@@ -65,17 +65,7 @@
             </div>
             <!-- Marker info bar -->
             <div id="marker-bar" style="display:none;">
-              <div class="marker-info" id="marker-a-info">
-                <span class="marker-dot marker-a"></span>
-                <span id="marker-a-label">Marker A: —</span>
-              </div>
-              <div class="marker-info" id="marker-b-info" style="display:none;">
-                <span class="marker-dot marker-b"></span>
-                <span id="marker-b-label">Marker B: —</span>
-              </div>
-              <div class="marker-info marker-delta" id="marker-delta" style="display:none;">
-                <span>Δt: </span><span id="marker-delta-label">—</span>
-              </div>
+              <div id="marker-bar-content"></div>
               <button id="clear-markers-btn" title="Clear markers">✕ Clear</button>
             </div>
           </div>

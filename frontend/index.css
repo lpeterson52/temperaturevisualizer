@@ -332,7 +332,48 @@ main {
 .marker-delta {
   font-weight: 600;
   color: var(--accent);
-  margin-left: auto;
+}
+
+#marker-bar-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.marker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.marker-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.marker-time {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.marker-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 16px;
+}
+
+.marker-chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 
 #clear-markers-btn {

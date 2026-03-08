@@ -66,7 +66,7 @@ function generateTankConfigs(data) {
             for (const state of states) {
                 configs.push({
                     label: `Tank ${letter}${i} ${state} (°C)`,
-                    data: data.map(entry => entry[`Tank ${letter}${i} ${state} (C)`]),
+                    data: data.map(entry => ({ x: getTimeInMinutes(entry["Date-Time"]), y: entry[`Tank ${letter}${i} ${state} (C)`] ?? null })),
                     borderColor: colorPairs[ci][0],
                     backgroundColor: colorPairs[ci][1],
                     borderWidth: 1.5,
@@ -108,8 +108,9 @@ function updateCustomLegend(chart) {
         item.appendChild(label);
         item.onclick = () => {
             chart.setDatasetVisibility(i, !chart.isDatasetVisible(i));
-            fitYAxis(chart);
             updateCustomLegend(chart);
+            updateMarkerBar();
+            fitYAxis(chart);
         };
         container.appendChild(item);
     });
@@ -139,32 +140,74 @@ function deltaString(labelA, labelB) {
     return parts.join(' ');
 }
 
-function updateMarkerBar() {
+function updateMarkerBar(pendingBIdx = -1) {
     const bar = document.getElementById('marker-bar');
+    const content = document.getElementById('marker-bar-content');
+    if (!bar || !content) return;
+
     if (!markerA) {
-        if (bar) bar.style.display = 'none';
+        bar.style.display = 'none';
+        content.innerHTML = '';
         return;
     }
-    if (bar) bar.style.display = 'flex';
+    bar.style.display = 'flex';
+    content.innerHTML = '';
 
-    const aLabel = document.getElementById('marker-a-label');
-    const bLabel = document.getElementById('marker-b-label');
-    const bInfo  = document.getElementById('marker-b-info');
-    const deltaEl = document.getElementById('marker-delta');
-    const deltaLabel = document.getElementById('marker-delta-label');
+    function buildMarkerSection(marker, dotClass, dimmed = false) {
+        const section = document.createElement('div');
+        section.className = 'marker-section';
+        if (dimmed) section.style.opacity = '0.5';
 
-    if (aLabel) aLabel.textContent = `Marker A: ${formatLabel(chartLabels[markerA.labelIndex])}`;
-    if (bInfo)  bInfo.style.display  = markerB ? 'flex' : 'none';
-    if (deltaEl) deltaEl.style.display = markerB ? 'flex' : 'none';
+        const header = document.createElement('div');
+        header.className = 'marker-header';
+        const dot = document.createElement('span');
+        dot.className = `marker-dot ${dotClass}`;
+        header.appendChild(dot);
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'marker-time';
+        timeSpan.textContent = formatTimeLabel(getTimeInMinutes(chartLabels[marker.labelIndex]), 1);
+        header.appendChild(timeSpan);
+        section.appendChild(header);
 
-    if (markerB && bLabel) {
-        bLabel.textContent = `Marker B: ${formatLabel(chartLabels[markerB.labelIndex])}`;
+        if (temperatureChart) {
+            const valuesDiv = document.createElement('div');
+            valuesDiv.className = 'marker-values';
+            temperatureChart.data.datasets.forEach((ds, i) => {
+                if (!temperatureChart.isDatasetVisible(i)) return;
+                const v = ds.data[marker.labelIndex]?.y;
+                if (v == null) return;
+                const chip = document.createElement('span');
+                chip.className = 'marker-chip';
+                chip.style.color = ds.borderColor;
+                chip.textContent = v.toFixed(2) + ' °C';
+                valuesDiv.appendChild(chip);
+            });
+            section.appendChild(valuesDiv);
+        }
+        return section;
     }
-    if (markerB && deltaLabel) {
-        deltaLabel.textContent = deltaString(
+
+    content.appendChild(buildMarkerSection(markerA, 'marker-a'));
+
+    if (markerB) {
+        content.appendChild(buildMarkerSection(markerB, 'marker-b'));
+        const deltaEl = document.createElement('div');
+        deltaEl.className = 'marker-info marker-delta';
+        deltaEl.innerHTML = `<span>Δt: </span><span>${deltaString(
             chartLabels[markerA.labelIndex],
             chartLabels[markerB.labelIndex]
-        );
+        )}</span>`;
+        content.appendChild(deltaEl);
+    } else if (pendingBIdx >= 0 && chartLabels[pendingBIdx]) {
+        content.appendChild(buildMarkerSection({ labelIndex: pendingBIdx }, 'marker-b', true));
+        const deltaEl = document.createElement('div');
+        deltaEl.className = 'marker-info marker-delta';
+        deltaEl.style.opacity = '0.5';
+        deltaEl.innerHTML = `<span>Δt: </span><span>${deltaString(
+            chartLabels[markerA.labelIndex],
+            chartLabels[pendingBIdx]
+        )}</span>`;
+        content.appendChild(deltaEl);
     }
 }
 
@@ -199,36 +242,36 @@ function setupOverlay(chart) {
         if (!xScale) return -1;
         const { left, right } = xScale;
         if (canvasX < left || canvasX > right) return -1;
-        const ratio = (canvasX - left) / (right - left);
-        const idx   = Math.round(ratio * (chartLabels.length - 1));
-        return Math.max(0, Math.min(chartLabels.length - 1, idx));
+        const minutes = xScale.getValueForPixel(canvasX);
+        return getIndexForTime(minutes);
     }
 
     function getCanvasXForIndex(chartInstance, idx) {
         const xScale = chartInstance.scales.x;
         if (!xScale || !chartLabels.length) return -1;
-        const { left, right } = xScale;
-        return left + (idx / (chartLabels.length - 1)) * (right - left);
+        const minutes = getTimeInMinutes(chartLabels[idx]);
+        return xScale.getPixelForValue(minutes);
     }
 
-    function drawMarkerLine(ctx, x, color, label, side = 'right') {
-        const h = overlay.height;
+    function drawMarkerLine(ctx, x, color, side = 'right') {
+        if (!temperatureChart?.scales?.y) return;
+        const { top, bottom } = temperatureChart.scales.y;
         ctx.save();
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;
         ctx.setLineDash([5, 4]);
         ctx.globalAlpha = 0.85;
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
         ctx.stroke();
-        // small flag
+        // small flag at top
         ctx.globalAlpha = 1;
         ctx.setLineDash([]);
         ctx.fillStyle = color;
         const fW = 8, fH = 8;
         const fx = side === 'right' ? x : x - fW;
-        ctx.fillRect(fx, 0, fW, fH);
+        ctx.fillRect(fx, top, fW, fH);
         ctx.restore();
     }
 
@@ -236,42 +279,54 @@ function setupOverlay(chart) {
         ctx.clearRect(0, 0, overlay.width, overlay.height);
         if (!temperatureChart) return;
 
-        // Draw existing markers first
-        if (markerA) {
-            const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
-            if (ax >= 0) drawMarkerLine(ctx, ax, '#f5c518', 'A', 'right');
-        }
-        if (markerB) {
-            const bx = getCanvasXForIndex(temperatureChart, markerB.labelIndex);
-            if (bx >= 0) drawMarkerLine(ctx, bx, '#4fc3f7', 'B', 'left');
-            // Shade region between markers
-            if (markerA) {
-                const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
-                const bx2 = getCanvasXForIndex(temperatureChart, markerB.labelIndex);
-                if (ax >= 0 && bx2 >= 0) {
-                    ctx.save();
-                    ctx.fillStyle = 'rgba(79,142,247,0.06)';
-                    ctx.fillRect(Math.min(ax, bx2), 0, Math.abs(bx2 - ax), overlay.height);
-                    ctx.restore();
-                }
-            }
-        }
-
-        // Crosshair
-        if (cursorX < 0) return;
         const xScale = temperatureChart.scales.x;
         const yScale = temperatureChart.scales.y;
         if (!xScale || !yScale) return;
-        if (cursorX < xScale.left || cursorX > xScale.right) return;
+        const { top, bottom } = yScale;
+        const regionH = bottom - top;
 
+        // Preview fill: A placed, B not yet, cursor in chart area
+        if (markerA && !markerB && cursorX >= xScale.left && cursorX <= xScale.right) {
+            const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
+            if (ax >= 0) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(150,200,255,0.10)';
+                ctx.fillRect(Math.min(ax, cursorX), top, Math.abs(cursorX - ax), regionH);
+                ctx.restore();
+            }
+        }
+
+        // Solid region between both placed markers
+        if (markerA && markerB) {
+            const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
+            const bx = getCanvasXForIndex(temperatureChart, markerB.labelIndex);
+            if (ax >= 0 && bx >= 0) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(79,142,247,0.06)';
+                ctx.fillRect(Math.min(ax, bx), top, Math.abs(bx - ax), regionH);
+                ctx.restore();
+            }
+        }
+
+        // Draw marker lines on top of fills
+        if (markerA) {
+            const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
+            if (ax >= 0) drawMarkerLine(ctx, ax, '#f5c518', 'right');
+        }
+        if (markerB) {
+            const bx = getCanvasXForIndex(temperatureChart, markerB.labelIndex);
+            if (bx >= 0) drawMarkerLine(ctx, bx, '#4fc3f7', 'left');
+        }
+
+        // Crosshair
+        if (cursorX < 0 || cursorX < xScale.left || cursorX > xScale.right) return;
         ctx.save();
         ctx.strokeStyle = 'rgba(255,255,255,0.2)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
-        // vertical line
         ctx.beginPath();
-        ctx.moveTo(cursorX, yScale.top);
-        ctx.lineTo(cursorX, yScale.bottom);
+        ctx.moveTo(cursorX, top);
+        ctx.lineTo(cursorX, bottom);
         ctx.stroke();
         ctx.restore();
     }
@@ -305,9 +360,9 @@ function setupOverlay(chart) {
             if (!temperatureChart.isDatasetVisible(i)) continue;
             
             const data = temperatureChart.data.datasets[i].data;
-            if (data[idx] == null) continue;
+            if (data[idx]?.y == null) continue;
 
-            const tempValue = data[idx];
+            const tempValue = data[idx].y;
             // Convert temperature value to canvas Y coordinate
             const datasetCanvasY = yScale.getPixelForValue(tempValue);
             const distance = Math.abs(canvasY - datasetCanvasY);
@@ -321,7 +376,7 @@ function setupOverlay(chart) {
         if (closestDatasetIndex >= 0) {
             const dataset = temperatureChart.data.datasets[closestDatasetIndex];
             return {
-                temp: dataset.data[idx],
+                temp: dataset.data[idx].y,
                 color: dataset.borderColor
             };
         }
@@ -362,7 +417,7 @@ function setupOverlay(chart) {
             // position relative to container
             const cRect = container.getBoundingClientRect();
             let tx = e.clientX - cRect.left;
-            const ty = e.clientY - cRect.top - 50;
+            const ty = Math.max(0, e.clientY - cRect.top - 50);
             // clamp so tooltip stays inside
             const tw = tooltip.offsetWidth;
             tx = Math.max(tw / 2 + 4, Math.min(cRect.width - tw / 2 - 4, tx));
@@ -372,12 +427,14 @@ function setupOverlay(chart) {
             tooltip.style.display = 'none';
         }
 
+        if (markerA && !markerB) updateMarkerBar(idx);
         drawCrosshair();
     });
 
     chartCanvas.addEventListener('mouseleave', () => {
         cursorX = cursorY = -1;
         tooltip.style.display = 'none';
+        if (markerA && !markerB) updateMarkerBar();
         drawCrosshair();
     });
 
@@ -399,19 +456,28 @@ function setupOverlay(chart) {
     chartCanvas.addEventListener('click', (e) => {
         if (!temperatureChart || !chartLabels.length || mouseDown || Math.abs(mouseX) > 5) return;
         const rect = chartCanvas.getBoundingClientRect();
-        const cx = (e.clientX - rect.left) * (chartCanvas.width  / rect.width);
+        const cx = (e.clientX - rect.left) * (chartCanvas.width / rect.width);
         const idx = getLabelIndexAt(temperatureChart, cx);
         if (idx < 0) return;
 
-        if (!markerA) {
-            markerA = { labelIndex: idx };
-        } else if (!markerB) {
+        if (markerA && markerB) {
+            // Both placed: clear both
+            markerA = markerB = null;
+        } else if (markerA) {
+            // Place second marker
             markerB = { labelIndex: idx };
         } else {
-            // cycle: replace A with B, set B to new click
-            markerA = markerB;
-            markerB = { labelIndex: idx };
+            // Place first marker
+            markerA = { labelIndex: idx };
         }
+        updateMarkerBar();
+        drawCrosshair();
+    });
+
+    chartCanvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (!markerA && !markerB) return;
+        markerA = markerB = null;
         updateMarkerBar();
         drawCrosshair();
     });
@@ -429,6 +495,95 @@ function setupOverlay(chart) {
         updateMarkerBar();
         drawCrosshair();
     });
+}
+
+// ─── Dynamic X-axis marker spacing ────────────────────────────────────────
+function cleanFloat(value) {
+    return parseFloat(value.toPrecision(12));
+}
+
+// Time-aware nice intervals in minutes (sub-min → hour → day → week → month)
+const NICE_TIME_INTERVALS = [
+    1, 2, 5, 10, 15, 20, 30,
+    60, 120, 180, 240, 360, 480, 720,
+    1440, 2880, 4320, 7200, 10080,
+    20160, 43200
+];
+
+function calcTimeStepSize(minTime, maxTime, pixelWidth) {
+    const X_STEP_TARGET_PX = 100;
+    const duration = maxTime - minTime;
+    if (duration <= 0 || pixelWidth <= 0) return 1;
+    const approxStep = duration / (pixelWidth / X_STEP_TARGET_PX);
+    for (const interval of NICE_TIME_INTERVALS) {
+        if (interval >= approxStep) return interval;
+    }
+    return NICE_TIME_INTERVALS[NICE_TIME_INTERVALS.length - 1];
+}
+
+function getPSTTime(label) {
+    const date = new Date(label);
+    if (isNaN(date)) return 0;
+    return new Date(date.getTime() - (8 * 60 * 60 * 1000));
+}
+
+function getTimeInMinutes(label) {
+    const date = new Date(label);
+    if (isNaN(date)) return 0;
+    return date.getTime() / 60000;
+}
+
+function getIndexForTime(minutes) {
+    // Binary search: closest index in chartLabels for a given minute value
+    if (!chartLabels.length) return 0;
+    let lo = 0, hi = chartLabels.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (getTimeInMinutes(chartLabels[mid]) < minutes) lo = mid + 1;
+        else hi = mid;
+    }
+    if (lo > 0) {
+        const dHi  = Math.abs(getTimeInMinutes(chartLabels[lo])     - minutes);
+        const dLo  = Math.abs(getTimeInMinutes(chartLabels[lo - 1]) - minutes);
+        if (dLo < dHi) return lo - 1;
+    }
+    return lo;
+}
+
+function formatTimeLabel(minutesSinceEpoch, stepMinutes) {
+    const date = new Date(minutesSinceEpoch * 60000);
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const month = MONTHS[date.getMonth()];
+    const day   = date.getDate();
+    let   hours = date.getHours();
+    const ampm  = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+
+    if (stepMinutes >= 1440) {
+        // Day-level: "Mar 6"
+        return `${month} ${day}`;
+    } else if (stepMinutes >= 60) {
+        // Hour-level: "Mar 6, 7AM"
+        return `${month} ${day}, ${hours}${ampm}`;
+    } else {
+        // Minute-level: "Mar 6, 7:12AM"
+        const mins = String(date.getMinutes()).padStart(2, '0');
+        return `${month} ${day}, ${hours}:${mins}${ampm}`;
+    }
+}
+
+function getXAxisTicks(minTime, maxTime, pixelWidth) {
+    if (pixelWidth <= 0 || maxTime <= minTime) return [];
+    const stepMinutes = calcTimeStepSize(minTime, maxTime, pixelWidth);
+    const ticks = [];
+    let stepPos = Math.ceil(cleanFloat(minTime / stepMinutes)) * stepMinutes;
+    let iterCount = 0;
+    while (iterCount++ < 2000) {
+        if (stepPos > maxTime) break;
+        ticks.push({ time: stepPos, label: formatTimeLabel(stepPos, stepMinutes) });
+        stepPos = cleanFloat(stepPos + stepMinutes);
+    }
+    return ticks;
 }
 
 // ─── Chart creation ────────────────────────────────────────────────────────
@@ -476,32 +631,38 @@ async function displayChart(startDate, endDate) {
     const emptyState = document.getElementById('empty-state');
     if (emptyState) emptyState.style.display = 'none';
 
+    // Use the form date range as the initial visible window (end date = end of that day)
+    const xFormMin = getTimeInMinutes(getPSTTime(startDate));
+    const xFormMax = getTimeInMinutes(getPSTTime(endDate)) + 24 * 60; // include the full end day
+
+    const xMin = chartLabels.length ? getTimeInMinutes(chartLabels[0]) : xFormMin;
+    const xMax = chartLabels.length ? getTimeInMinutes(chartLabels[chartLabels.length - 1]) : xFormMax;
+
     temperatureChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: chartLabels,
             datasets: tankConfigs
         },
         options: {
             animation: false,
             responsive: true,
             maintainAspectRatio: false,
+            parsing: false,
             interaction: {
                 mode: 'index',
                 intersect: false
             },
             plugins: {
                 zoom: {
+                    limits: {
+                        x: { min: xMin, max: xMax },
+                    },
                     pan: {
                         enabled: true,
                         mode: 'x',
-                        threshold: 20,
-                        onPan({ chart }) {
-                            fitYAxis(chart);
-                        },
-                        onPanComplete({ chart }) {
-                            fitYAxis(chart);
-                        }
+                        threshold: 10,
+                        onPan: ({ chart }) => fitYAxis(chart),
+                        onPanComplete: ({ chart }) => fitYAxis(chart),
                     },
                     zoom: {
                         wheel: {
@@ -512,14 +673,9 @@ async function displayChart(startDate, endDate) {
                             enabled: true,
                         },
                         mode: 'x',
-                        onZoom({ chart }) {
-                            fitYAxis(chart);
-                        },
-                        onZoomComplete({ chart }) {
-                            fitYAxis(chart);
-                        },
+                        onZoom: ({ chart }) => fitYAxis(chart),
+                        onZoomComplete: ({ chart }) => fitYAxis(chart),
                     },
-                    
                 },
                 legend: { display: false },
                 title: { display: false },
@@ -534,7 +690,7 @@ async function displayChart(startDate, endDate) {
                     filter: item => !item.dataset.hidden,
                     callbacks: {
                         label: ctx => {
-                            const val = ctx.parsed.y;
+                            const val = ctx.raw?.y;
                             return val != null ? `  ${ctx.dataset.label.replace(' (°C)','')}  ${val.toFixed(2)} °C` : null;
                         }
                     }
@@ -542,11 +698,25 @@ async function displayChart(startDate, endDate) {
             },
             scales: {
                 x: {
+                    type: 'linear',
+                    min: xMin,
+                    max: xMax,
+                    // Replace Chart.js auto-ticks with our exact time-aligned ticks
+                    afterBuildTicks: function(scale) {
+                        const pixelWidth = scale.right - scale.left;
+                        if (pixelWidth <= 0 || !chartLabels.length) return;
+                        const axisTicks = getXAxisTicks(scale.min, scale.max, pixelWidth);
+                        scale.ticks = axisTicks.map(t => ({ value: t.time }));
+                    },
                     ticks: {
                         color: '#555d75',
                         maxRotation: 0,
-                        maxTicksLimit: 10,
-                        font: { size: 11 }
+                        font: { size: 11 },
+                        // 'this' is the scale; value is minutes since epoch
+                        callback: function(value) {
+                            const stepSize = calcTimeStepSize(this.min, this.max, this.right - this.left);
+                            return formatTimeLabel(value, stepSize);
+                        }
                     },
                     grid: {
                         color: 'rgba(255,255,255,0.04)'
@@ -556,7 +726,7 @@ async function displayChart(startDate, endDate) {
                     ticks: {
                         color: '#555d75',
                         font: { size: 11 },
-                        callback: v => v + ' °C'
+                        callback: v => (Math.round(v * 100) / 100) + ' °C'
                     },
                     grid: {
                         color: 'rgba(255,255,255,0.04)'
@@ -581,9 +751,9 @@ async function displayChart(startDate, endDate) {
         }
     }
     temperatureChart.update('none');
-    fitYAxis(temperatureChart);
     updateCustomLegend(temperatureChart);
     setupOverlay(temperatureChart);
+    fitYAxis(temperatureChart);
 
     if (submitBtn) {
         submitBtn.disabled = false;
@@ -591,29 +761,18 @@ async function displayChart(startDate, endDate) {
     }
 }
 
-// Auto-fit visible Y range during pan/zoom for the current X window.
 function fitYAxis(chart) {
+    if (!chart?.scales) return;
     const xScale = chart.scales.x;
     const yScale = chart.scales.y;
-    if (!xScale || !yScale) return;
+    if (!xScale || !yScale || !chartLabels.length) return;
 
-    const DEFAULT_MIN = -1;
-    const DEFAULT_MAX = 1;
-    const EPSILON = 1e-9;
-    const RANGE_PAD = 1;
+    const DEFAULT_MIN = -1, DEFAULT_MAX = 1;
+    const EPSILON = 1e-9, RANGE_PAD = 1;
 
-    if (!chartLabels.length) {
-        const yOpts = chart.options.scales.y;
-        if (!nearlyEqual(yOpts.min ?? Number.NaN, DEFAULT_MIN, EPSILON) || !nearlyEqual(yOpts.max ?? Number.NaN, DEFAULT_MAX, EPSILON)) {
-            yOpts.min = DEFAULT_MIN;
-            yOpts.max = DEFAULT_MAX;
-            chart.update('none');
-        }
-        return;
-    }
-
-    const minIdx = Math.max(0, Math.floor(xScale.min));
-    const maxIdx = Math.min(chartLabels.length - 1, Math.ceil(xScale.max));
+    // xScale.min/max are in minutes; convert to data indices
+    const minIdx = Math.max(0, getIndexForTime(xScale.min));
+    const maxIdx = Math.min(chartLabels.length - 1, getIndexForTime(xScale.max));
     if (minIdx > maxIdx) return;
 
     const d = chart.data.datasets.length;
@@ -623,13 +782,14 @@ function fitYAxis(chart) {
         if (!chart.isDatasetVisible(i)) continue;
         const src = chart.data.datasets[i].data;
         for (let k = minIdx; k <= maxIdx; k++) {
-            const v = Math.round(src[k] * 10) / 10;
-            if (v !== v) continue;  // NaN
+            const v = src[k]?.y;
+            if (v == null || v !== v) continue; // null or NaN
             if (v < globalMin) globalMin = v;
             if (v > globalMax) globalMax = v;
         }
     }
-    if (globalMin === Infinity || globalMax === -Infinity) {
+
+    if (!isFinite(globalMin) || !isFinite(globalMax)) {
         globalMin = DEFAULT_MIN;
         globalMax = DEFAULT_MAX;
     }
@@ -639,8 +799,7 @@ function fitYAxis(chart) {
         globalMax += RANGE_PAD;
     }
 
-    const span = globalMax - globalMin;
-    const margin = span * 0.05;
+    const margin = (globalMax - globalMin) * 0.05;
     let newMin = globalMin - margin;
     let newMax = globalMax + margin;
 
@@ -650,8 +809,8 @@ function fitYAxis(chart) {
     }
 
     const yOpts = chart.options.scales.y;
-    const oldMin = typeof yOpts.min === 'number' ? yOpts.min : Number.NaN;
-    const oldMax = typeof yOpts.max === 'number' ? yOpts.max : Number.NaN;
+    const oldMin = typeof yOpts.min === 'number' ? yOpts.min : NaN;
+    const oldMax = typeof yOpts.max === 'number' ? yOpts.max : NaN;
     if (nearlyEqual(oldMin, newMin, EPSILON) && nearlyEqual(oldMax, newMax, EPSILON)) return;
 
     yOpts.min = Math.round(newMin * 100) / 100;
@@ -708,11 +867,10 @@ async function pollJobStatus(fetchJob, interval = 800) {
 document.getElementById('reset-zoom-btn')?.addEventListener('click', () => {
     if (!temperatureChart) return;
     temperatureChart.resetZoom();
-    // clear manual y bounds so chart auto-scales again
+    // clear manual y bounds so fitYAxis can recalculate
     delete temperatureChart.options.scales.y.min;
     delete temperatureChart.options.scales.y.max;
-
-    temperatureChart.update('none');
+    fitYAxis(temperatureChart);
 });
 
 // ─── Form submit ───────────────────────────────────────────────────────────
