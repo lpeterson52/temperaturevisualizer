@@ -14,7 +14,7 @@ After you create the environment, you are going to want to activate it. <br>
 Windows: `source .venv/scripts/activate` <br>
 Macos: `source .venv/bin/activate`
 After activating the environment, install the required dependencies from requirements.txt.
-```python
+```bash
 pip install -r requirements.txt
 ```
 Please note that this also requires a cpp compiler for numpy, and a Cargo, the Rust package manager, for pydantic_core. This can be installed at https://rustup.rs/
@@ -26,11 +26,11 @@ The backend is now running locally on your computer!. You can access the api by 
 
 ## API Endpoints
 ### /api
-Returns temperature data from start date to end date. <br>
-```json
-start_date: YYYY-MM-DD <br>
-end_date: YYYY-MM-DD <br>
-```
+Returns temperature data from start date to end date.
+
+Query parameters:
+- `start_date` (required): start of the date range in `YYYY-MM-DD` format
+- `end_date` (required): end of the date range in `YYYY-MM-DD` format
 example call: /api?start_date=2025-07-01&end_date=2025-07-05
 
 ### /cache
