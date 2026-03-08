@@ -584,9 +584,11 @@ function setupOverlay(chart) {
 
     let mouseDown = false;
     let mouseX = 0;
+    let lastClickTime = 0;
 
     chartCanvas.addEventListener('mousedown', (e) => {
         mouseDown = true;
+        mouseX = 0; // reset delta before each new press
         const rect = chartCanvas.getBoundingClientRect();
         mouseX = (e.clientX - rect.left) * (chartCanvas.width / rect.width);
     });
@@ -598,7 +600,10 @@ function setupOverlay(chart) {
     });
 
     chartCanvas.addEventListener('click', (e) => {
+        const now = Date.now();
+        if (now - lastClickTime < 300) return; // debounce accidental double-clicks
         if (!temperatureChart || !chartLabels.length || mouseDown || Math.abs(mouseX) > 5) return;
+        lastClickTime = now;
         const rect = chartCanvas.getBoundingClientRect();
         const cx = (e.clientX - rect.left) * (chartCanvas.width / rect.width);
         const idx = getLabelIndexAt(temperatureChart, cx);
