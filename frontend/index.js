@@ -10,6 +10,10 @@ let chartLabels = [];          // raw label strings from data
 let markerA = null;            // { labelIndex, x (canvas px) }
 let markerB = null;
 
+function nearlyEqual(a, b, epsilon = 1e-9) {
+    return Math.abs(a - b) <= epsilon;
+}
+
 function wakeupServer() {
     if (DEBUG) return;
     fetch(backendUrl);
@@ -104,7 +108,7 @@ function updateCustomLegend(chart) {
         item.appendChild(label);
         item.onclick = () => {
             chart.setDatasetVisibility(i, !chart.isDatasetVisible(i));
-            chart.update('none');
+            fitYAxis(chart);
             updateCustomLegend(chart);
         };
         container.appendChild(item);
@@ -276,6 +280,54 @@ function setupOverlay(chart) {
     const chartCanvas = document.getElementById('temperatureChart');
     chartCanvas.style.cursor = 'crosshair';
 
+    function extractTimeFromLabel(label) {
+        // Parse label to extract time in HH:MM AM/PM format
+        // Assume label format is "YYYY-MM-DD HH:MM" or similar ISO-like format
+        const date = new Date(label);
+        if (isNaN(date)) return label; // fallback if parsing fails
+        
+        let hours = date.getHours();
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        return `${hours}:${minutes} ${ampm}`;
+    }
+
+    function getClosestVisibleTempAtIndex(idx, canvasY) {
+        // Get the temperature and color from the visible dataset whose canvas position is closest to canvasY
+        const yScale = temperatureChart.scales.y;
+        if (!yScale) return { temp: null, color: null };
+
+        let closestDatasetIndex = -1;
+        let closestDistance = Infinity;
+
+        for (let i = 0; i < temperatureChart.data.datasets.length; i++) {
+            if (!temperatureChart.isDatasetVisible(i)) continue;
+            
+            const data = temperatureChart.data.datasets[i].data;
+            if (data[idx] == null) continue;
+
+            const tempValue = data[idx];
+            // Convert temperature value to canvas Y coordinate
+            const datasetCanvasY = yScale.getPixelForValue(tempValue);
+            const distance = Math.abs(canvasY - datasetCanvasY);
+
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestDatasetIndex = i;
+            }
+        }
+
+        if (closestDatasetIndex >= 0) {
+            const dataset = temperatureChart.data.datasets[closestDatasetIndex];
+            return {
+                temp: dataset.data[idx],
+                color: dataset.borderColor
+            };
+        }
+        return { temp: null, color: null };
+    }
+
     chartCanvas.addEventListener('mousemove', (e) => {
         if (!temperatureChart) return;
         const rect = chartCanvas.getBoundingClientRect();
@@ -285,12 +337,32 @@ function setupOverlay(chart) {
         const idx = getLabelIndexAt(temperatureChart, cursorX);
 
         if (idx >= 0 && chartLabels[idx]) {
-            tooltip.textContent = chartLabels[idx];
+            const time = extractTimeFromLabel(chartLabels[idx]);
+            const { temp, color } = getClosestVisibleTempAtIndex(idx, cursorY);
+            
+            // Clear tooltip and rebuild with colored temp
+            tooltip.innerHTML = '';
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = time;
+            tooltip.appendChild(timeSpan);
+            
+            if (temp != null) {
+                const bullet = document.createElement('span');
+                bullet.textContent = ' • ';
+                tooltip.appendChild(bullet);
+                
+                const tempSpan = document.createElement('span');
+                tempSpan.textContent = temp.toFixed(2) + ' °C';
+                tempSpan.style.color = color;
+                tempSpan.style.fontWeight = 'bold';
+                tooltip.appendChild(tempSpan);
+            }
+            
             tooltip.style.display = 'block';
             // position relative to container
             const cRect = container.getBoundingClientRect();
             let tx = e.clientX - cRect.left;
-            const ty = e.clientY - cRect.top - 32;
+            const ty = e.clientY - cRect.top - 50;
             // clamp so tooltip stays inside
             const tw = tooltip.offsetWidth;
             tx = Math.max(tw / 2 + 4, Math.min(cRect.width - tw / 2 - 4, tx));
@@ -309,8 +381,23 @@ function setupOverlay(chart) {
         drawCrosshair();
     });
 
+    let mouseDown = false;
+    let mouseX = 0;
+
+    chartCanvas.addEventListener('mousedown', (e) => {
+        mouseDown = true;
+        const rect = chartCanvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) * (chartCanvas.width / rect.width);
+    });
+
+    chartCanvas.addEventListener('mouseup', (e) => {
+        mouseDown = false;
+        const rect = chartCanvas.getBoundingClientRect();
+        mouseX -= (e.clientX - rect.left) * (chartCanvas.width / rect.width);
+    });
+
     chartCanvas.addEventListener('click', (e) => {
-        if (!temperatureChart || !chartLabels.length) return;
+        if (!temperatureChart || !chartLabels.length || mouseDown || Math.abs(mouseX) > 5) return;
         const rect = chartCanvas.getBoundingClientRect();
         const cx = (e.clientX - rect.left) * (chartCanvas.width  / rect.width);
         const idx = getLabelIndexAt(temperatureChart, cx);
@@ -408,7 +495,13 @@ async function displayChart(startDate, endDate) {
                     pan: {
                         enabled: true,
                         mode: 'x',
-                        modifierKey: null, // left-click drag (no modifier needed)
+                        threshold: 20,
+                        onPan({ chart }) {
+                            fitYAxis(chart);
+                        },
+                        onPanComplete({ chart }) {
+                            fitYAxis(chart);
+                        }
                     },
                     zoom: {
                         wheel: {
@@ -420,13 +513,13 @@ async function displayChart(startDate, endDate) {
                         },
                         mode: 'x',
                         onZoom({ chart }) {
-                            // y-axis auto-scales to visible data range
-                            autoScaleY(chart);
+                            fitYAxis(chart);
+                        },
+                        onZoomComplete({ chart }) {
+                            fitYAxis(chart);
                         },
                     },
-                    onPan({ chart }) {
-                        autoScaleY(chart);
-                    }
+                    
                 },
                 legend: { display: false },
                 title: { display: false },
@@ -488,14 +581,9 @@ async function displayChart(startDate, endDate) {
         }
     }
     temperatureChart.update('none');
+    fitYAxis(temperatureChart);
     updateCustomLegend(temperatureChart);
     setupOverlay(temperatureChart);
-
-    // Pan → also auto-scale y
-    const origUpdate = temperatureChart.update.bind(temperatureChart);
-    temperatureChart.update = function(mode, ...rest) {
-        origUpdate(mode, ...rest);
-    };
 
     if (submitBtn) {
         submitBtn.disabled = false;
@@ -503,27 +591,71 @@ async function displayChart(startDate, endDate) {
     }
 }
 
-// Auto-scale Y to visible data range after zoom/pan
-function autoScaleY(chart) {
+// Auto-fit visible Y range during pan/zoom for the current X window.
+function fitYAxis(chart) {
     const xScale = chart.scales.x;
-    if (!xScale) return;
+    const yScale = chart.scales.y;
+    if (!xScale || !yScale) return;
+
+    const DEFAULT_MIN = -1;
+    const DEFAULT_MAX = 1;
+    const EPSILON = 1e-9;
+    const RANGE_PAD = 1;
+
+    if (!chartLabels.length) {
+        const yOpts = chart.options.scales.y;
+        if (!nearlyEqual(yOpts.min ?? Number.NaN, DEFAULT_MIN, EPSILON) || !nearlyEqual(yOpts.max ?? Number.NaN, DEFAULT_MAX, EPSILON)) {
+            yOpts.min = DEFAULT_MIN;
+            yOpts.max = DEFAULT_MAX;
+            chart.update('none');
+        }
+        return;
+    }
+
     const minIdx = Math.max(0, Math.floor(xScale.min));
     const maxIdx = Math.min(chartLabels.length - 1, Math.ceil(xScale.max));
+    if (minIdx > maxIdx) return;
 
+    const d = chart.data.datasets.length;
     let globalMin = Infinity, globalMax = -Infinity;
-    chart.data.datasets.forEach((ds, i) => {
-        if (!chart.isDatasetVisible(i)) return;
+
+    for (let i = 0; i < d; i++) {
+        if (!chart.isDatasetVisible(i)) continue;
+        const src = chart.data.datasets[i].data;
         for (let k = minIdx; k <= maxIdx; k++) {
-            const v = Math.round(ds.data[k]);
-            if (v == null) continue;
+            const v = Math.round(src[k] * 10) / 10;
+            if (v !== v) continue;  // NaN
             if (v < globalMin) globalMin = v;
             if (v > globalMax) globalMax = v;
         }
-    });
-    if (globalMin === Infinity) return;
-    const pad = (globalMax - globalMin) * 0.05 || 1;
-    chart.options.scales.y.min = globalMin - pad;
-    chart.options.scales.y.max = globalMax + pad;
+    }
+    if (globalMin === Infinity || globalMax === -Infinity) {
+        globalMin = DEFAULT_MIN;
+        globalMax = DEFAULT_MAX;
+    }
+
+    if (nearlyEqual(globalMin, globalMax, EPSILON)) {
+        globalMin -= RANGE_PAD;
+        globalMax += RANGE_PAD;
+    }
+
+    const span = globalMax - globalMin;
+    const margin = span * 0.05;
+    let newMin = globalMin - margin;
+    let newMax = globalMax + margin;
+
+    if (nearlyEqual(newMin, newMax, EPSILON)) {
+        newMin -= RANGE_PAD;
+        newMax += RANGE_PAD;
+    }
+
+    const yOpts = chart.options.scales.y;
+    const oldMin = typeof yOpts.min === 'number' ? yOpts.min : Number.NaN;
+    const oldMax = typeof yOpts.max === 'number' ? yOpts.max : Number.NaN;
+    if (nearlyEqual(oldMin, newMin, EPSILON) && nearlyEqual(oldMax, newMax, EPSILON)) return;
+
+    yOpts.min = Math.round(newMin * 100) / 100;
+    yOpts.max = Math.round(newMax * 100) / 100;
     chart.update('none');
 }
 
@@ -579,6 +711,7 @@ document.getElementById('reset-zoom-btn')?.addEventListener('click', () => {
     // clear manual y bounds so chart auto-scales again
     delete temperatureChart.options.scales.y.min;
     delete temperatureChart.options.scales.y.max;
+
     temperatureChart.update('none');
 });
 
