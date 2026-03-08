@@ -10,6 +10,7 @@ let chartLabels = [];          // raw label strings from data
 let markerA = null;            // { labelIndex, x (canvas px) }
 let markerB = null;
 let statsSelectedDatasetIdx = -1;
+let savedVisibility = null;    // Set<label> persisted across date-range reloads
 
 function nearlyEqual(a, b, epsilon = 1e-9) {
     return Math.abs(a - b) <= epsilon;
@@ -831,8 +832,21 @@ async function displayChart(startDate, endDate) {
 
     const ctx = document.getElementById('temperatureChart').getContext('2d');
     if (temperatureChart) {
+        // Snapshot which datasets the user had visible so we can restore them
+        savedVisibility = new Set(
+            temperatureChart.data.datasets
+                .filter((_, i) => temperatureChart.isDatasetVisible(i))
+                .map(ds => ds.label)
+        );
         temperatureChart.destroy();
         temperatureChart = null;
+    }
+
+    // Re-apply the previous selection if one exists
+    if (savedVisibility !== null) {
+        tankConfigs.forEach(cfg => {
+            if (savedVisibility.has(cfg.label)) cfg.hidden = false;
+        });
     }
 
     // Reset markers on new data
