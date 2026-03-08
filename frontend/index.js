@@ -65,9 +65,11 @@ function generateTankConfigs(data) {
     for (const letter of letters) {
         for (let i = 1; i <= 4; i++) {
             for (const state of states) {
+                const rawData = data.map(entry => ({ x: getTimeInMinutes(entry["Date-Time"]), y: entry[`Tank ${letter}${i} ${state} (C)`] ?? null }));
                 configs.push({
                     label: `Tank ${letter}${i} ${state} (°C)`,
-                    data: data.map(entry => ({ x: getTimeInMinutes(entry["Date-Time"]), y: entry[`Tank ${letter}${i} ${state} (C)`] ?? null })),
+                    data: rawData,
+                    _rawData: rawData,
                     borderColor: colorPairs[ci][0],
                     backgroundColor: colorPairs[ci][1],
                     borderWidth: 1.5,
@@ -206,7 +208,7 @@ function updateMarkerBar(markerBPendingIdx = -1) {
             valuesDiv.className = 'marker-values';
             temperatureChart.data.datasets.forEach((ds, i) => {
                 if (!temperatureChart.isDatasetVisible(i)) return;
-                const v = ds.data[marker.labelIndex]?.y;
+                const v = (ds._rawData ?? ds.data)[marker.labelIndex]?.y;
                 if (v == null) return;
                 const chip = document.createElement('span');
                 chip.className = 'marker-chip';
@@ -310,7 +312,8 @@ function updateStatsPanel(markerBPendingIdx = -1) {
     // Gather values
     const values = [];
     if (selectedIdx >= 0 && temperatureChart.data.datasets[selectedIdx]) {
-        const src = temperatureChart.data.datasets[selectedIdx].data;
+        const _ds = temperatureChart.data.datasets[selectedIdx];
+        const src = _ds._rawData ?? _ds.data;
         for (let k = minIdx; k <= maxIdx; k++) {
             const v = src[k]?.y;
             if (v != null && isFinite(v)) values.push(v);
@@ -730,6 +733,66 @@ function getXAxisTicks(minTime, maxTime, pixelWidth) {
     return ticks;
 }
 
+// ─── LTTB downsampling ────────────────────────────────────────────────────
+// Largest-Triangle-Three-Buckets: preserves visual shape while drastically
+// reducing point count. Stats/markers always read from ds._rawData instead.
+function lttbDownsample(data, targetPoints) {
+    const n = data.length;
+    if (targetPoints >= n) return data;
+    if (targetPoints <= 2) return [data[0], data[n - 1]];
+
+    const sampled = [data[0]];
+    const bucketSize = (n - 2) / (targetPoints - 2);
+    let a = 0;
+
+    for (let i = 0; i < targetPoints - 2; i++) {
+        const bucketStart = Math.floor((i + 1) * bucketSize) + 1;
+        const bucketEnd   = Math.min(Math.floor((i + 2) * bucketSize) + 1, n - 1);
+
+        // Average of the next bucket for lookahead
+        const nextStart = bucketEnd;
+        const nextEnd   = Math.min(Math.floor((i + 3) * bucketSize) + 1, n - 1);
+        let avgX = 0, avgY = 0, avgCount = 0;
+        for (let j = nextStart; j < nextEnd; j++) {
+            if (data[j].y != null) { avgX += data[j].x; avgY += data[j].y; avgCount++; }
+        }
+        if (avgCount) { avgX /= avgCount; avgY /= avgCount; }
+        else { avgX = data[Math.floor((nextStart + nextEnd) / 2)]?.x ?? 0; avgY = 0; }
+
+        // Pick the point in this bucket that forms the largest triangle
+        let maxArea = -1, selectedIdx = bucketStart;
+        const ax = data[a].x, ay = data[a].y ?? 0;
+        for (let j = bucketStart; j < bucketEnd; j++) {
+            if (data[j].y == null) continue;
+            const area = Math.abs((ax - avgX) * (data[j].y - ay) - (ax - data[j].x) * (avgY - ay)) * 0.5;
+            if (area > maxArea) { maxArea = area; selectedIdx = j; }
+        }
+        sampled.push(data[selectedIdx]);
+        a = selectedIdx;
+    }
+
+    sampled.push(data[n - 1]);
+    return sampled;
+}
+
+function resampleDatasets(chart) {
+    const xScale = chart.scales?.x;
+    if (!xScale) return;
+    const pixelWidth = Math.max(100, xScale.right - xScale.left);
+    const targetPoints = Math.ceil(pixelWidth * 2); // ~2 pts/pixel is plenty
+
+    // Slice to only the visible index range (+1 padding each side for clean edge rendering)
+    const minIdx = Math.max(0, getIndexForTime(xScale.min) - 1);
+    const maxIdx = Math.min(chartLabels.length - 1, getIndexForTime(xScale.max) + 1);
+
+    chart.data.datasets.forEach((ds, i) => {
+        if (!ds._rawData || !chart.isDatasetVisible(i)) return; // only parse through sets we can see
+        const visibleSlice = ds._rawData.slice(minIdx, maxIdx + 1);
+        ds.data = lttbDownsample(visibleSlice, targetPoints);
+    });
+    chart.update('none');
+}
+
 // ─── Chart creation ────────────────────────────────────────────────────────
 async function displayChart(startDate, endDate) {
     const submitBtn = document.getElementById('submitBtn');
@@ -805,8 +868,8 @@ async function displayChart(startDate, endDate) {
                         enabled: true,
                         mode: 'x',
                         threshold: 10,
-                        onPan: ({ chart }) => { fitYAxis(chart); updateStatsPanel(); },
-                        // onPanComplete: ({ chart }) => { fitYAxis(chart); updateStatsPanel(); },
+                        onPan: ({ chart }) => { resampleDatasets(chart); fitYAxis(chart); updateStatsPanel(); },
+                        onPanComplete: ({ chart }) => { resampleDatasets(chart); fitYAxis(chart);  },
                     },
                     zoom: {
                         wheel: {
@@ -817,8 +880,8 @@ async function displayChart(startDate, endDate) {
                             enabled: true,
                         },
                         mode: 'x',
-                        onZoom: ({ chart }) => { fitYAxis(chart); updateStatsPanel(); },
-                        // onZoomComplete: ({ chart }) => { fitYAxis(chart); updateStatsPanel(); },
+                        onZoom: ({ chart }) => { resampleDatasets(chart); fitYAxis(chart); updateStatsPanel(); },
+                        onZoomComplete: ({ chart }) => { resampleDatasets(chart); fitYAxis(chart); },
                     },
                 },
                 legend: { display: false },
@@ -895,6 +958,7 @@ async function displayChart(startDate, endDate) {
         }
     }
     temperatureChart.update('none');
+    resampleDatasets(temperatureChart);
     updateCustomLegend(temperatureChart);
     setupOverlay(temperatureChart);
     fitYAxis(temperatureChart);
@@ -925,7 +989,8 @@ function fitYAxis(chart) {
 
     for (let i = 0; i < d; i++) {
         if (!chart.isDatasetVisible(i)) continue;
-        const src = chart.data.datasets[i].data;
+        const ds = chart.data.datasets[i]
+        const src = (ds._rawData ?? ds.data);
         for (let k = minIdx; k <= maxIdx; k++) {
             const v = src[k]?.y;
             if (v == null || v !== v) continue; // null or NaN
