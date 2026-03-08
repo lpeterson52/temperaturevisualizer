@@ -16,7 +16,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-      </head>
+    <script src='https://unpkg.com/simple-statistics@7.8.8/dist/simple-statistics.min.js'></script>
+  </head>
   <body>
     <header>
       <div class="header-inner">
@@ -45,6 +46,47 @@
 
       <div id="app">
         <div id="main-container">
+          <div id="stats-panel">
+            <div class="stats-header">
+              <span class="stats-title">Statistics</span>
+              <div id="stats-selector-row"></div>
+            </div>
+            <div class="stats-body">
+              <div class="stats-group">
+                <div class="stats-row"><span class="stats-label">Count</span><span class="stats-value" id="stat-count">—</span></div>
+                <div class="stats-row"><span class="stats-label">Min</span><span class="stats-value" id="stat-min">—</span></div>
+                <div class="stats-row"><span class="stats-label">Max</span><span class="stats-value" id="stat-max">—</span></div>
+              </div>
+              <div class="stats-section-header">Center</div>
+              <div class="stats-group">
+                <div class="stats-row"><span class="stats-label">Mean</span><span class="stats-value" id="stat-mean">—</span></div>
+                <div class="stats-row"><span class="stats-label">Median</span><span class="stats-value" id="stat-median">—</span></div>
+                <div class="stats-row"><span class="stats-label">Mode</span><span class="stats-value" id="stat-mode">—</span></div>
+                <div class="stats-row"><span class="stats-label">Geo. Mean</span><span class="stats-value" id="stat-geo-mean">—</span></div>
+                <div class="stats-row"><span class="stats-label">Har. Mean</span><span class="stats-value" id="stat-har-mean">—</span></div>
+                <div class="stats-row"><span class="stats-label">Quad. Mean</span><span class="stats-value" id="stat-rms">—</span></div>
+              </div>
+              <div class="stats-section-header">Spread</div>
+              <div class="stats-group">
+                <div class="stats-row"><span class="stats-label">Std. Dev</span><span class="stats-value" id="stat-std-dev">—</span></div>
+                <div class="stats-row"><span class="stats-label">Variance</span><span class="stats-value" id="stat-var">—</span></div>
+                <div class="stats-row"><span class="stats-label">IQR</span><span class="stats-value" id="stat-iqr">—</span></div>
+                <div class="stats-row"><span class="stats-label">Skewness</span><span class="stats-value" id="stat-skewness">—</span></div>
+              </div>
+              <div class="stats-section-header">Percentiles</div>
+              <div class="stats-group">
+                <div class="stats-row"><span class="stats-label">1st</span><span class="stats-value" id="stat-p1">—</span></div>
+                <div class="stats-row"><span class="stats-label">5th</span><span class="stats-value" id="stat-p5">—</span></div>
+                <div class="stats-row"><span class="stats-label">10th</span><span class="stats-value" id="stat-p10">—</span></div>
+                <div class="stats-row"><span class="stats-label">25th</span><span class="stats-value" id="stat-p25">—</span></div>
+                <div class="stats-row"><span class="stats-label">50th</span><span class="stats-value" id="stat-p50">—</span></div>
+                <div class="stats-row"><span class="stats-label">75th</span><span class="stats-value" id="stat-p75">—</span></div>
+                <div class="stats-row"><span class="stats-label">90th</span><span class="stats-value" id="stat-p90">—</span></div>
+                <div class="stats-row"><span class="stats-label">95th</span><span class="stats-value" id="stat-p95">—</span></div>
+                <div class="stats-row"><span class="stats-label">99th</span><span class="stats-value" id="stat-p99">—</span></div>
+              </div>
+            </div>
+          </div>
           <div id="chart-wrapper">
             <div id="chart-toolbar">
               <div class="hint-text">

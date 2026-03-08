@@ -9,6 +9,7 @@ let temperatureChart = null;
 let chartLabels = [];          // raw label strings from data
 let markerA = null;            // { labelIndex, x (canvas px) }
 let markerB = null;
+let statsSelectedDatasetIdx = -1;
 
 function nearlyEqual(a, b, epsilon = 1e-9) {
     return Math.abs(a - b) <= epsilon;
@@ -88,31 +89,62 @@ function updateCustomLegend(chart) {
     const container = document.getElementById('custom-legend');
     if (!container) return;
     container.innerHTML = '';
-    chart.data.datasets.forEach((ds, i) => {
-        const visible = chart.isDatasetVisible(i);
-        const item = document.createElement('div');
-        item.className = 'legend-item' + (visible ? ' active' : '');
 
-        const box = document.createElement('span');
-        box.style.cssText = `
-            display:inline-block;width:12px;height:12px;flex-shrink:0;
-            background:${ds.borderColor};border-radius:3px;
-            opacity:${visible ? 1 : 0.3};
-        `;
+    const letters = ['A', 'B', 'C', 'D'];
+    // Grid render order within each letter group (8 datasets: 4 tanks × 2 states)
+    // Original order: 1W(0),1C(1),2W(2),2C(3),3W(4),3C(5),4W(6),4C(7)
+    // 2-col grid rows: (1W,1C),(2W,2C),(3W,3C),(4W,4C)
+    const renderOrder = [0, 1, 2, 3, 4, 5, 6, 7];
 
-        const label = document.createElement('span');
-        label.textContent = ds.label;
-        label.style.opacity = visible ? '1' : '0.4';
+    letters.forEach(letter => {
+        const letterBaseIdx = letters.indexOf(letter) * 8;
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'legend-letter-group';
 
-        item.appendChild(box);
-        item.appendChild(label);
-        item.onclick = () => {
-            chart.setDatasetVisibility(i, !chart.isDatasetVisible(i));
-            updateCustomLegend(chart);
-            updateMarkerBar();
-            fitYAxis(chart);
-        };
-        container.appendChild(item);
+        const header = document.createElement('div');
+        header.className = 'legend-letter-header';
+        header.textContent = `Tank ${letter}`;
+        groupDiv.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'legend-tank-grid';
+
+        renderOrder.forEach(offset => {
+            const dsIdx = letterBaseIdx + offset;
+            const ds = chart.data.datasets[dsIdx];
+            if (!ds) return;
+            const visible = chart.isDatasetVisible(dsIdx);
+
+            const item = document.createElement('div');
+            item.className = 'legend-item' + (visible ? ' active' : '');
+
+            const box = document.createElement('span');
+            box.style.cssText = `
+                display:inline-block;width:8px;height:8px;flex-shrink:0;
+                background:${ds.borderColor};border-radius:2px;
+                opacity:${visible ? 1 : 0.3};
+            `;
+
+            const tankNum = Math.floor(offset / 2) + 1;
+            const stateChar = offset % 2 === 0 ? 'Warm' : 'Cool';
+            const lbl = document.createElement('span');
+            lbl.textContent = `${tankNum} ${stateChar}`;
+            lbl.style.opacity = visible ? '1' : '0.4';
+
+            item.appendChild(box);
+            item.appendChild(lbl);
+            item.onclick = () => {
+                chart.setDatasetVisibility(dsIdx, !chart.isDatasetVisible(dsIdx));
+                if (!fitYAxis(chart)) chart.update('none');
+                updateCustomLegend(chart);
+                updateMarkerBar();
+                updateStatsPanel();
+            };
+            grid.appendChild(item);
+        });
+
+        groupDiv.appendChild(grid);
+        container.appendChild(groupDiv);
     });
 }
 
@@ -140,7 +172,7 @@ function deltaString(labelA, labelB) {
     return parts.join(' ');
 }
 
-function updateMarkerBar(pendingBIdx = -1) {
+function updateMarkerBar(markerBPendingIdx = -1) {
     const bar = document.getElementById('marker-bar');
     const content = document.getElementById('marker-bar-content');
     if (!bar || !content) return;
@@ -198,17 +230,123 @@ function updateMarkerBar(pendingBIdx = -1) {
             chartLabels[markerB.labelIndex]
         )}</span>`;
         content.appendChild(deltaEl);
-    } else if (pendingBIdx >= 0 && chartLabels[pendingBIdx]) {
-        content.appendChild(buildMarkerSection({ labelIndex: pendingBIdx }, 'marker-b', true));
+    } else if (markerBPendingIdx >= 0 && chartLabels[markerBPendingIdx]) {
+        content.appendChild(buildMarkerSection({ labelIndex: markerBPendingIdx }, 'marker-b', true));
         const deltaEl = document.createElement('div');
         deltaEl.className = 'marker-info marker-delta';
         deltaEl.style.opacity = '0.5';
         deltaEl.innerHTML = `<span>Δt: </span><span>${deltaString(
             chartLabels[markerA.labelIndex],
-            chartLabels[pendingBIdx]
+            chartLabels[markerBPendingIdx]
         )}</span>`;
         content.appendChild(deltaEl);
     }
+}
+
+// ─── Stats panel ──────────────────────────────────────────────────────────
+function updateStatsPanel(markerBPendingIdx = -1) {
+    if (!temperatureChart) return;
+    const selectorRow = document.getElementById('stats-selector-row');
+    if (!selectorRow) return;
+
+    // Build visible dataset list
+    const visibleDatasets = [];
+    temperatureChart.data.datasets.forEach((ds, i) => {
+        if (temperatureChart.isDatasetVisible(i)) visibleDatasets.push({ ds, i });
+    });
+
+    // Resolve selected dataset — fall back to first visible if selection gone
+    if (!visibleDatasets.some(e => e.i === statsSelectedDatasetIdx)) {
+        statsSelectedDatasetIdx = visibleDatasets.length > 0 ? visibleDatasets[0].i : -1;
+    }
+    const selectedIdx = statsSelectedDatasetIdx;
+
+    // Rebuild selector
+    selectorRow.innerHTML = '';
+    if (visibleDatasets.length === 1) {
+        const lbl = document.createElement('span');
+        lbl.className = 'stats-single-label';
+        lbl.textContent = visibleDatasets[0].ds.label.replace(' (°C)', '');
+        lbl.style.color = visibleDatasets[0].ds.borderColor;
+        selectorRow.appendChild(lbl);
+    } else if (visibleDatasets.length > 1) {
+        const select = document.createElement('select');
+        select.className = 'stats-select';
+        select.style.color = temperatureChart.data.datasets[selectedIdx].borderColor;
+        visibleDatasets.forEach(({ ds, i }) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = ds.label.replace(' (°C)', '');
+            opt.style.color = ds.borderColor;
+            if (i === selectedIdx) opt.selected = true;
+            select.appendChild(opt);
+        });
+        select.addEventListener('change', () => {
+            statsSelectedDatasetIdx = parseInt(select.value);
+            updateStatsPanel();
+        });
+        selectorRow.appendChild(select);
+    }
+
+    // Determine index range: zoom window, or between markers
+    const xScale = temperatureChart.scales.x;
+    let minIdx = xScale ? getIndexForTime(xScale.min) : 0;
+    let maxIdx = xScale ? getIndexForTime(xScale.max) : Math.max(0, chartLabels.length - 1);
+    if (markerA) {
+        let markerBIdx;
+        if (markerB) {
+            markerBIdx = markerB.labelIndex;
+        } else if (markerBPendingIdx >= 0) {
+            markerBIdx = markerBPendingIdx;
+        }
+        if (markerBIdx != null) {
+            minIdx = Math.min(markerA.labelIndex, markerBIdx);
+            maxIdx = Math.max(markerA.labelIndex, markerBIdx);
+        }
+    }
+
+    const em = '\u2014';
+
+    // Gather values
+    const values = [];
+    if (selectedIdx >= 0 && temperatureChart.data.datasets[selectedIdx]) {
+        const src = temperatureChart.data.datasets[selectedIdx].data;
+        for (let k = minIdx; k <= maxIdx; k++) {
+            const v = src[k]?.y;
+            if (v != null && isFinite(v)) values.push(v);
+        }
+    }
+
+    function stat(fn) {
+        if (!values.length) return em;
+        try {
+            const v = fn();
+            if (typeof v !== 'number' || !isFinite(v)) return em;
+            return v.toFixed(3);
+        } catch { return em; }
+    }
+
+    function setEl(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+
+    setEl('stat-count',    values.length > 0 ? values.length.toString() : em);
+    setEl('stat-min',      stat(() => ss.min(values)));
+    setEl('stat-max',      stat(() => ss.max(values)));
+    setEl('stat-mean',     stat(() => ss.mean(values)));
+    setEl('stat-median',   stat(() => ss.median(values)));
+    setEl('stat-mode',     stat(() => { const m = ss.mode(values); return Array.isArray(m) ? m[0] : m; }));
+    setEl('stat-geo-mean', stat(() => ss.geometricMean(values)));
+    setEl('stat-har-mean', stat(() => ss.harmonicMean(values)));
+    setEl('stat-rms',      stat(() => ss.rootMeanSquare(values)));
+    setEl('stat-std-dev',  stat(() => ss.standardDeviation(values)));
+    setEl('stat-var',      stat(() => ss.variance(values)));
+    setEl('stat-iqr',      stat(() => ss.interquartileRange(values)));
+    setEl('stat-skewness', stat(() => values.length >= 3 ? ss.sampleSkewness(values) : NaN));
+    [1, 5, 10, 25, 50, 75, 90, 95, 99].forEach(p => {
+        setEl(`stat-p${p}`, stat(() => ss.quantile(values, p / 100)));
+    });
 }
 
 // ─── Overlay canvas (crosshair + markers) ─────────────────────────────────
@@ -300,7 +438,7 @@ function setupOverlay(chart) {
         if (markerA && markerB) {
             const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
             const bx = getCanvasXForIndex(temperatureChart, markerB.labelIndex);
-            if (ax >= 0 && bx >= 0) {
+            if (ax >= 0 || bx >= 0) {
                 ctx.save();
                 ctx.fillStyle = 'rgba(79,142,247,0.06)';
                 ctx.fillRect(Math.min(ax, bx), top, Math.abs(bx - ax), regionH);
@@ -427,7 +565,10 @@ function setupOverlay(chart) {
             tooltip.style.display = 'none';
         }
 
-        if (markerA && !markerB) updateMarkerBar(idx);
+        if (markerA && !markerB) {
+            updateMarkerBar(idx);
+            updateStatsPanel(idx);
+        }
         drawCrosshair();
     });
 
@@ -463,7 +604,7 @@ function setupOverlay(chart) {
         if (markerA && markerB) {
             // Both placed: clear both
             markerA = markerB = null;
-        } else if (markerA) {
+        } else if (markerA && !markerB) {
             // Place second marker
             markerB = { labelIndex: idx };
         } else {
@@ -471,6 +612,7 @@ function setupOverlay(chart) {
             markerA = { labelIndex: idx };
         }
         updateMarkerBar();
+        updateStatsPanel();
         drawCrosshair();
     });
 
@@ -479,6 +621,7 @@ function setupOverlay(chart) {
         if (!markerA && !markerB) return;
         markerA = markerB = null;
         updateMarkerBar();
+        updateStatsPanel();
         drawCrosshair();
     });
 
@@ -493,6 +636,7 @@ function setupOverlay(chart) {
     document.getElementById('clear-markers-btn')?.addEventListener('click', () => {
         markerA = markerB = null;
         updateMarkerBar();
+        updateStatsPanel();
         drawCrosshair();
     });
 }
@@ -661,8 +805,8 @@ async function displayChart(startDate, endDate) {
                         enabled: true,
                         mode: 'x',
                         threshold: 10,
-                        onPan: ({ chart }) => fitYAxis(chart),
-                        onPanComplete: ({ chart }) => fitYAxis(chart),
+                        onPan: ({ chart }) => { fitYAxis(chart); updateStatsPanel(); },
+                        // onPanComplete: ({ chart }) => { fitYAxis(chart); updateStatsPanel(); },
                     },
                     zoom: {
                         wheel: {
@@ -673,8 +817,8 @@ async function displayChart(startDate, endDate) {
                             enabled: true,
                         },
                         mode: 'x',
-                        onZoom: ({ chart }) => fitYAxis(chart),
-                        onZoomComplete: ({ chart }) => fitYAxis(chart),
+                        onZoom: ({ chart }) => { fitYAxis(chart); updateStatsPanel(); },
+                        // onZoomComplete: ({ chart }) => { fitYAxis(chart); updateStatsPanel(); },
                     },
                 },
                 legend: { display: false },
@@ -754,6 +898,7 @@ async function displayChart(startDate, endDate) {
     updateCustomLegend(temperatureChart);
     setupOverlay(temperatureChart);
     fitYAxis(temperatureChart);
+    updateStatsPanel();
 
     if (submitBtn) {
         submitBtn.disabled = false;
