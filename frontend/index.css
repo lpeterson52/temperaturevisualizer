@@ -259,8 +259,10 @@ main {
   box-shadow: var(--shadow);
 }
 
-#temperatureChart,
-#overlay-canvas {
+#uplot-container,
+#uplot-container .uplot,
+#uplot-container .u-wrap,
+#uplot-container canvas {
   position: absolute;
   top: 0;
   left: 0;
@@ -268,8 +270,20 @@ main {
   height: 100% !important;
 }
 
+/* strip uPlot's built-in legend/title — we manage our own */
+#uplot-container .u-legend { display: none !important; }
+#uplot-container .u-title  { display: none !important; }
+
+/* uPlot cursor tooltip — hide the default one, we use #crosshair-tooltip */
+#uplot-container .u-tooltip { display: none !important; }
+
 #overlay-canvas {
-  pointer-events: none; /* let chart receive events; JS will selectively enable */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none;
   z-index: 10;
 }
 

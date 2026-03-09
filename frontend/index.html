@@ -12,10 +12,9 @@
     />
     <link rel="stylesheet" href="index.css" />
     <link rel="icon" href="favicon.ico" />
-    <!-- Chart.js v4 + zoom plugin v2 (requires hammerjs for pinch) -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <!-- uPlot -->
+    <link rel="stylesheet" href="dist/uPlot.min.css">
+    <script src="dist/uPlot.iife.min.js"></script>
     <script src='https://unpkg.com/simple-statistics@7.8.8/dist/simple-statistics.min.js'></script>
   </head>
   <body>
@@ -101,8 +100,9 @@
                 <div class="empty-icon">📈</div>
                 <p>Enter a date range to visualize temperature data</p>
               </div>
-              <canvas id="temperatureChart"></canvas>
-              <!-- Crosshair + marker overlay -->
+              <!-- uPlot mounts here -->
+              <div id="uplot-container"></div>
+              <!-- Crosshair + marker overlay (sits above uPlot canvas) -->
               <canvas id="overlay-canvas"></canvas>
             </div>
             <!-- Marker info bar -->
