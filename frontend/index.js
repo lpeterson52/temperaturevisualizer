@@ -18,6 +18,7 @@ let savedVisibility = null;    // Set<label> persisted across date-range reloads
 let _initXMin = 0;             // full-data x range for reset-zoom
 let _initXMax = 0;
 let _fittingY = false;         // re-entrancy guard for fitYAxis
+let _yAxisMeasureCtx = null;   // shared canvas context for y-axis label measurement
 
 function nearlyEqual(a, b, epsilon = 1e-9) {
     return Math.abs(a - b) <= epsilon;
@@ -961,8 +962,8 @@ async function displayChart(startDate, endDate) {
         cursor: {
             show:  true,
             drag:  { setScale: false, x: false, y: false }, // we handle drag ourselves
-            sync:  { key: null },
-            points: { show: false },
+            // sync:  { key: null },
+            // points: { show: false },
         },
         series: uplotSeries,
         axes: [
@@ -1007,7 +1008,15 @@ async function displayChart(startDate, endDate) {
                 grid:    { stroke: 'rgba(255,255,255,0.04)', width: 1 },
                 ticks:   { stroke: 'rgba(255,255,255,0.04)', width: 1 },
                 font:    '11px Inter, system-ui, sans-serif',
-                size:    55,
+                size:    (self, values, axisIdx, cycleNum) => {
+                    // On the initial call uPlot passes values=null; measure a worst-case
+                    // label so the axis slot is large enough from the very first layout pass.
+                    const probe = values?.length ? values : ['-99.999° C'];
+                    const tc = _yAxisMeasureCtx ??= document.createElement('canvas').getContext('2d');
+                    tc.font = '11px Inter, system-ui, sans-serif';
+                    const maxW = probe.reduce((m, v) => Math.max(m, v ? tc.measureText(String(v)).width : 0), 0);
+                    return Math.ceil(maxW) + 16;
+                },
                 gap:     6,
             },
             {
@@ -1016,7 +1025,13 @@ async function displayChart(startDate, endDate) {
                 stroke:  '#555d75',
                 grid: {show: false},
                 font:    '11px Inter, system-ui, sans-serif',
-                size:    55,
+                size:    (self, values, axisIdx, cycleNum) => {
+                    const probe = values?.length ? values : ['-199.9° F'];
+                    const tc = _yAxisMeasureCtx ??= document.createElement('canvas').getContext('2d');
+                    tc.font = '11px Inter, system-ui, sans-serif';
+                    const maxW = probe.reduce((m, v) => Math.max(m, v ? tc.measureText(String(v)).width : 0), 0);
+                    return Math.ceil(maxW) + 16;
+                },
                 gap:     6,
                 side: 1, // right side
             },

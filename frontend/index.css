@@ -261,8 +261,7 @@ main {
 
 #uplot-container,
 #uplot-container .uplot,
-#uplot-container .u-wrap,
-#uplot-container canvas {
+#uplot-container .u-wrap {
   position: absolute;
   top: 0;
   left: 0;
