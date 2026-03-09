@@ -868,15 +868,16 @@ async function displayChart(startDate, endDate) {
             value: (u, v) => v == null ? '' : new Date(v * 1000).toLocaleString(),
         },
         // series[1..N] = y series
-        ...seriesMeta.map((m, i) => ({
+        ...seriesMeta.map((m, i) => (
+            {
             label:    m.label,
             stroke:   m.stroke,
-            fill:     m.fill,
+            // fill:     m.fill,
             width:    1.5,
             show:     seriesVisible[i],
             spanGaps: false,
-            points:   { show: false },
             value:    (u, v) => v == null ? '' : v.toFixed(2) + ' °C',
+            scale: "C",
         })),
     ];
 
@@ -989,19 +990,47 @@ async function displayChart(startDate, endDate) {
                 gap:  6,
             },
             // y-axis
+            // {
+            //     stroke:  '#555d75',
+            //     grid:    { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+            //     ticks:   { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+            //     font:    '11px Inter, system-ui, sans-serif',
+            //     values:  (u, splits) => splits.map(v => v == null ? '' : v.toFixed(1) + ' °C'),
+            //     size:    55,
+            //     gap:     6,
+            // },
             {
+                scale: "C",
+                values: (self, ticks) => ticks.map(rawValue => rawValue + "° C"),
+                grid: {show: false},
                 stroke:  '#555d75',
                 grid:    { stroke: 'rgba(255,255,255,0.04)', width: 1 },
                 ticks:   { stroke: 'rgba(255,255,255,0.04)', width: 1 },
                 font:    '11px Inter, system-ui, sans-serif',
-                values:  (u, splits) => splits.map(v => v == null ? '' : v.toFixed(1) + ' °C'),
                 size:    55,
                 gap:     6,
             },
+            {
+                scale: "F",
+                values: (self, ticks) => ticks.map(rawValue => rawValue + "° F"),
+                stroke:  '#555d75',
+                grid: {show: false},
+                font:    '11px Inter, system-ui, sans-serif',
+                size:    55,
+                gap:     6,
+                side: 1, // right side
+            },
         ],
         scales: {
-            x: { time: false, auto: false, min: _initXMin, max: _initXMax },
+            x: { time: true, auto: false, min: _initXMin, max: _initXMax },
             y: { auto: false },
+            "F": {
+                from: "C",
+                range: (self, fromMin, fromMax) => [
+                    (fromMin * 9/5) + 32,
+                    (fromMax * 9/5) + 32,
+                ],
+            }
         },
         plugins: [ wheelZoomPanPlugin() ],
         hooks: {
