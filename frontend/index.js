@@ -143,6 +143,7 @@ function updateCustomLegend() {
 
             const item = document.createElement('div');
             item.className = 'legend-item' + (vis ? ' active' : '');
+            item.style.setProperty("--tank-color", `${meta.stroke}`);
 
             const box = document.createElement('span');
             box.style.cssText = `
@@ -155,7 +156,6 @@ function updateCustomLegend() {
             const stateChar = offset % 2 === 0 ? 'Warm' : 'Cool';
             const lbl = document.createElement('span');
             lbl.textContent = `${tankNum} ${stateChar}`;
-            lbl.style.opacity = vis ? '1' : '0.4';
 
             item.appendChild(box);
             item.appendChild(lbl);
@@ -172,6 +172,7 @@ function updateCustomLegend() {
                 updateMarkerBar();
                 updateStatsPanel();
             };
+            item.onmouseover
             grid.appendChild(item);
         });
 
