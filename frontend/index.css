@@ -259,8 +259,9 @@ main {
   box-shadow: var(--shadow);
 }
 
-#temperatureChart,
-#overlay-canvas {
+#uplot-container,
+#uplot-container .uplot,
+#uplot-container .u-wrap {
   position: absolute;
   top: 0;
   left: 0;
@@ -268,8 +269,20 @@ main {
   height: 100% !important;
 }
 
+/* strip uPlot's built-in legend/title — we manage our own */
+#uplot-container .u-legend { display: none !important; }
+#uplot-container .u-title  { display: none !important; }
+
+/* uPlot cursor tooltip — hide the default one, we use #crosshair-tooltip */
+#uplot-container .u-tooltip { display: none !important; }
+
 #overlay-canvas {
-  pointer-events: none; /* let chart receive events; JS will selectively enable */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none;
   z-index: 10;
 }
 
@@ -469,18 +482,27 @@ main {
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: var(--text-secondary);
-  transition: background var(--transition), color var(--transition);
+  width: 95%; /* little gaps between elements */
+  /* fully transparent, but transition only has to worry about the alpha channel */
+  border: color-mix(in srgb, var(--tank-color) 0%, transparent) 1px solid;
+  /* color: var(--text-secondary); */
+  color: var(--text-primary); /* "1 Warm" text color */
+  opacity: 0.4;
+  transition: all var(--transition);
   user-select: none;
 }
 
 #custom-legend .legend-item:hover {
   background: var(--surface-2);
   color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--tank-color) 50%, transparent);
+  opacity: 1;
 }
 
 #custom-legend .legend-item.active {
   color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--tank-color) 100%, transparent);
+  opacity: 1;
 }
 
 /* ─── Legend 2-column layout ──────────────────────────────────────────── */
@@ -493,7 +515,7 @@ main {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--text-primary);
   padding: 4px 8px 2px;
 }
 

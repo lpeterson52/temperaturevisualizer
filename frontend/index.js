@@ -5,12 +5,20 @@ const backendUrl = "https://temperaturevisualizer.onrender.com/";
 const apiUrl = DEBUG ? "http://localhost:8000/api" : backendUrl + "api";
 
 // ─── Global state ──────────────────────────────────────────────────────────
-let temperatureChart = null;
+let temperatureChart = null;   // uPlot instance
 let chartLabels = [];          // raw label strings from data
-let markerA = null;            // { labelIndex, x (canvas px) }
+let rawTimestamps = [];        // unix seconds for uPlot x-axis
+let rawSeriesData = [];        // rawSeriesData[i] = Float64Array of y-values for series i (0-based, matches uPlot data[i+1])
+let seriesMeta = [];           // { label, stroke, fill } per series (index 0 = series[1] in uPlot)
+let seriesVisible = [];        // boolean[] — visibility state per series
+let markerA = null;            // { labelIndex }
 let markerB = null;
 let statsSelectedDatasetIdx = -1;
 let savedVisibility = null;    // Set<label> persisted across date-range reloads
+let _initXMin = 0;             // full-data x range for reset-zoom
+let _initXMax = 0;
+let _fittingY = false;         // re-entrancy guard for fitYAxis
+let _yAxisMeasureCtx = null;   // shared canvas context for y-axis label measurement
 
 function nearlyEqual(a, b, epsilon = 1e-9) {
     return Math.abs(a - b) <= epsilon;
@@ -58,37 +66,53 @@ const colorPairs = [
     ['#b8860b', 'rgba(184,134,11,0.15)'],
 ];
 
+// Returns { uplotData, meta, visible }
+// uplotData[0]      = Float64Array of unix-seconds timestamps
+// uplotData[1..N]   = Float64Array of y-values per series (null → NaN for uPlot)
+// meta[i]           = { label, stroke, fill }  (matches uplotData[i+1])
+// visible[i]        = boolean
 function generateTankConfigs(data) {
-    const configs = [];
+    const n = data.length;
     const letters = ['A', 'B', 'C', 'D'];
     const states  = ['Warm', 'Cool'];
+
+    // Build x-axis: unix seconds (uPlot native time unit)
+    const xArr = new Float64Array(n);
+    for (let j = 0; j < n; j++) {
+        xArr[j] = new Date(data[j]["Date-Time"]).getTime() / 1000;
+    }
+
+    const yArrays = [];
+    const meta    = [];
+    const visible = [];
     let ci = 0;
+
     for (const letter of letters) {
         for (let i = 1; i <= 4; i++) {
             for (const state of states) {
-                const rawData = data.map(entry => ({ x: getTimeInMinutes(entry["Date-Time"]), y: entry[`Tank ${letter}${i} ${state} (C)`] ?? null }));
-                configs.push({
-                    label: `Tank ${letter}${i} ${state} (°C)`,
-                    data: rawData,
-                    _rawData: rawData,
-                    borderColor: colorPairs[ci][0],
-                    backgroundColor: colorPairs[ci][1],
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
-                    fill: false,
-                    tension: 0.1,
-                    hidden: true
+                const key = `Tank ${letter}${i} ${state} (C)`;
+                const yArr = new Float64Array(n);
+                for (let j = 0; j < n; j++) {
+                    const v = data[j][key];
+                    yArr[j] = (v == null || v === '' || isNaN(v)) ? NaN : +v;
+                }
+                yArrays.push(yArr);
+                meta.push({
+                    label:  `Tank ${letter}${i} ${state} (°C)`,
+                    stroke: colorPairs[ci][0],
+                    fill:   colorPairs[ci][1],
                 });
+                visible.push(false); // all hidden by default
                 ci++;
             }
         }
     }
-    return configs;
+
+    return { uplotData: [xArr, ...yArrays], meta, visible };
 }
 
 // ─── Custom Legend ─────────────────────────────────────────────────────────
-function updateCustomLegend(chart) {
+function updateCustomLegend() {
     const container = document.getElementById('custom-legend');
     if (!container) return;
     container.innerHTML = '';
@@ -96,7 +120,6 @@ function updateCustomLegend(chart) {
     const letters = ['A', 'B', 'C', 'D'];
     // Grid render order within each letter group (8 datasets: 4 tanks × 2 states)
     // Original order: 1W(0),1C(1),2W(2),2C(3),3W(4),3C(5),4W(6),4C(7)
-    // 2-col grid rows: (1W,1C),(2W,2C),(3W,3C),(4W,4C)
     const renderOrder = [0, 1, 2, 3, 4, 5, 6, 7];
 
     letters.forEach(letter => {
@@ -113,36 +136,43 @@ function updateCustomLegend(chart) {
         grid.className = 'legend-tank-grid';
 
         renderOrder.forEach(offset => {
-            const dsIdx = letterBaseIdx + offset;
-            const ds = chart.data.datasets[dsIdx];
-            if (!ds) return;
-            const visible = chart.isDatasetVisible(dsIdx);
+            const dsIdx = letterBaseIdx + offset; // 0-based index into seriesMeta/seriesVisible
+            const meta = seriesMeta[dsIdx];
+            if (!meta) return;
+            const vis = seriesVisible[dsIdx];
 
             const item = document.createElement('div');
-            item.className = 'legend-item' + (visible ? ' active' : '');
+            item.className = 'legend-item' + (vis ? ' active' : '');
+            item.style.setProperty("--tank-color", `${meta.stroke}`);
 
             const box = document.createElement('span');
             box.style.cssText = `
                 display:inline-block;width:8px;height:8px;flex-shrink:0;
-                background:${ds.borderColor};border-radius:2px;
-                opacity:${visible ? 1 : 0.3};
+                background:${meta.stroke};border-radius:2px;
+                opacity:${vis ? 1 : 0.3};
             `;
 
             const tankNum = Math.floor(offset / 2) + 1;
             const stateChar = offset % 2 === 0 ? 'Warm' : 'Cool';
             const lbl = document.createElement('span');
             lbl.textContent = `${tankNum} ${stateChar}`;
-            lbl.style.opacity = visible ? '1' : '0.4';
 
             item.appendChild(box);
             item.appendChild(lbl);
             item.onclick = () => {
-                chart.setDatasetVisibility(dsIdx, !chart.isDatasetVisible(dsIdx));
-                if (!fitYAxis(chart)) chart.update('none');
-                updateCustomLegend(chart);
+                seriesVisible[dsIdx] = !seriesVisible[dsIdx];
+                if (temperatureChart) {
+                    // setSeries updates the built-in legend DOM (l.style), which doesn't
+                    // exist when legend:{show:false} — directly mutate the series object instead.
+                    temperatureChart.series[dsIdx + 1].show = seriesVisible[dsIdx];
+                    temperatureChart.redraw();
+                }
+                fitYAxis();
+                updateCustomLegend();
                 updateMarkerBar();
                 updateStatsPanel();
             };
+            item.onmouseover
             grid.appendChild(item);
         });
 
@@ -200,20 +230,21 @@ function updateMarkerBar(markerBPendingIdx = -1) {
         header.appendChild(dot);
         const timeSpan = document.createElement('span');
         timeSpan.className = 'marker-time';
-        timeSpan.textContent = formatTimeLabel(getTimeInMinutes(chartLabels[marker.labelIndex]), 1);
+        // rawTimestamps are unix seconds; convert to minutes for formatTimeLabel
+        timeSpan.textContent = formatTimeLabel(rawTimestamps[marker.labelIndex] / 60, 1);
         header.appendChild(timeSpan);
         section.appendChild(header);
 
-        if (temperatureChart) {
+        if (temperatureChart && rawSeriesData.length) {
             const valuesDiv = document.createElement('div');
             valuesDiv.className = 'marker-values';
-            temperatureChart.data.datasets.forEach((ds, i) => {
-                if (!temperatureChart.isDatasetVisible(i)) return;
-                const v = (ds._rawData ?? ds.data)[marker.labelIndex]?.y;
-                if (v == null) return;
+            rawSeriesData.forEach((yArr, i) => {
+                if (!seriesVisible[i]) return;
+                const v = yArr[marker.labelIndex];
+                if (v == null || isNaN(v)) return;
                 const chip = document.createElement('span');
                 chip.className = 'marker-chip';
-                chip.style.color = ds.borderColor;
+                chip.style.color = seriesMeta[i].stroke;
                 chip.textContent = v.toFixed(2) + ' °C';
                 valuesDiv.appendChild(chip);
             });
@@ -233,7 +264,7 @@ function updateMarkerBar(markerBPendingIdx = -1) {
             chartLabels[markerB.labelIndex]
         )}</span>`;
         content.appendChild(deltaEl);
-    } else if (markerBPendingIdx >= 0 && chartLabels[markerBPendingIdx]) {
+    } else if (markerBPendingIdx >= 0 && rawTimestamps[markerBPendingIdx]) {
         content.appendChild(buildMarkerSection({ labelIndex: markerBPendingIdx }, 'marker-b', true));
         const deltaEl = document.createElement('div');
         deltaEl.className = 'marker-info marker-delta';
@@ -252,10 +283,10 @@ function updateStatsPanel(markerBPendingIdx = -1) {
     const selectorRow = document.getElementById('stats-selector-row');
     if (!selectorRow) return;
 
-    // Build visible dataset list
+    // Build visible dataset list (0-based into seriesMeta/rawSeriesData)
     const visibleDatasets = [];
-    temperatureChart.data.datasets.forEach((ds, i) => {
-        if (temperatureChart.isDatasetVisible(i)) visibleDatasets.push({ ds, i });
+    seriesMeta.forEach((m, i) => {
+        if (seriesVisible[i]) visibleDatasets.push({ meta: m, i });
     });
 
     // Resolve selected dataset — fall back to first visible if selection gone
@@ -269,18 +300,18 @@ function updateStatsPanel(markerBPendingIdx = -1) {
     if (visibleDatasets.length === 1) {
         const lbl = document.createElement('span');
         lbl.className = 'stats-single-label';
-        lbl.textContent = visibleDatasets[0].ds.label.replace(' (°C)', '');
-        lbl.style.color = visibleDatasets[0].ds.borderColor;
+        lbl.textContent = visibleDatasets[0].meta.label.replace(' (°C)', '');
+        lbl.style.color = visibleDatasets[0].meta.stroke;
         selectorRow.appendChild(lbl);
     } else if (visibleDatasets.length > 1) {
         const select = document.createElement('select');
         select.className = 'stats-select';
-        select.style.color = temperatureChart.data.datasets[selectedIdx].borderColor;
-        visibleDatasets.forEach(({ ds, i }) => {
+        if (selectedIdx >= 0) select.style.color = seriesMeta[selectedIdx].stroke;
+        visibleDatasets.forEach(({ meta, i }) => {
             const opt = document.createElement('option');
             opt.value = i;
-            opt.textContent = ds.label.replace(' (°C)', '');
-            opt.style.color = ds.borderColor;
+            opt.textContent = meta.label.replace(' (°C)', '');
+            opt.style.color = meta.stroke;
             if (i === selectedIdx) opt.selected = true;
             select.appendChild(opt);
         });
@@ -293,8 +324,9 @@ function updateStatsPanel(markerBPendingIdx = -1) {
 
     // Determine index range: zoom window, or between markers
     const xScale = temperatureChart.scales.x;
-    let minIdx = xScale ? getIndexForTime(xScale.min) : 0;
-    let maxIdx = xScale ? getIndexForTime(xScale.max) : Math.max(0, chartLabels.length - 1);
+    // xScale.min/max are unix seconds; convert via getIndexForTime which uses minutes
+    let minIdx = xScale ? getIndexForTime(xScale.min / 60) : 0;
+    let maxIdx = xScale ? getIndexForTime(xScale.max / 60) : Math.max(0, rawTimestamps.length - 1);
     if (markerA) {
         let markerBIdx;
         if (markerB) {
@@ -310,14 +342,13 @@ function updateStatsPanel(markerBPendingIdx = -1) {
 
     const em = '\u2014';
 
-    // Gather values
+    // Gather values from rawSeriesData
     const values = [];
-    if (selectedIdx >= 0 && temperatureChart.data.datasets[selectedIdx]) {
-        const _ds = temperatureChart.data.datasets[selectedIdx];
-        const src = _ds._rawData ?? _ds.data;
+    if (selectedIdx >= 0 && rawSeriesData[selectedIdx]) {
+        const src = rawSeriesData[selectedIdx];
         for (let k = minIdx; k <= maxIdx; k++) {
-            const v = src[k]?.y;
-            if (v != null && isFinite(v)) values.push(v);
+            const v = src[k];
+            if (v != null && isFinite(v) && !isNaN(v)) values.push(v);
         }
     }
 
@@ -354,12 +385,12 @@ function updateStatsPanel(markerBPendingIdx = -1) {
 }
 
 // ─── Overlay canvas (crosshair + markers) ─────────────────────────────────
-function setupOverlay(chart) {
+function setupOverlay() {
     const overlay = document.getElementById('overlay-canvas');
     const container = document.getElementById('chart-container');
     if (!overlay || !container) return;
 
-    // Size overlay to match chart canvas
+    // Size overlay to match container
     const resizeOverlay = () => {
         overlay.width  = overlay.offsetWidth;
         overlay.height = overlay.offsetHeight;
@@ -379,25 +410,39 @@ function setupOverlay(chart) {
 
     let cursorX = -1, cursorY = -1;
 
-    function getLabelIndexAt(chartInstance, canvasX) {
-        const xScale = chartInstance.scales.x;
-        if (!xScale) return -1;
-        const { left, right } = xScale;
-        if (canvasX < left || canvasX > right) return -1;
-        const minutes = xScale.getValueForPixel(canvasX);
-        return getIndexForTime(minutes);
+    // ── uPlot coordinate helpers ──────────────────────────────────────────
+
+    function getPlotBbox() {
+        if (!temperatureChart) return null;
+        // uPlot exposes bbox in CSS pixels (not device pixels)
+        return temperatureChart.bbox; // { left, top, width, height }
     }
 
-    function getCanvasXForIndex(chartInstance, idx) {
-        const xScale = chartInstance.scales.x;
-        if (!xScale || !chartLabels.length) return -1;
-        const minutes = getTimeInMinutes(chartLabels[idx]);
-        return xScale.getPixelForValue(minutes);
+    // Returns the nearest data index for a given CSS-pixel x inside the plot
+    function getLabelIndexAtCSSX(cssX) {
+        if (!temperatureChart) return -1;
+        const bb = getPlotBbox();
+        if (!bb) return -1;
+        const xVal = temperatureChart.posToVal(cssX - bb.left / devicePixelRatio, 'x');
+        return getIndexForTime(xVal / 60);
+    }
+
+    // Returns the CSS-pixel x for a data index
+    function getCanvasXForIndex(idx) {
+        if (!temperatureChart || !rawTimestamps.length) return -1;
+        const bb = getPlotBbox();
+        if (!bb) return -1;
+        const px = temperatureChart.valToPos(rawTimestamps[idx], 'x');
+        return px + bb.left / devicePixelRatio;
     }
 
     function drawMarkerLine(ctx, x, color, side = 'right') {
-        if (!temperatureChart?.scales?.y) return;
-        const { top, bottom } = temperatureChart.scales.y;
+        if (!temperatureChart) return;
+        const bb = getPlotBbox();
+        if (!bb) return;
+        const dpr = devicePixelRatio;
+        const top    = bb.top    / dpr;
+        const bottom = (bb.top + bb.height) / dpr;
         ctx.save();
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;
@@ -421,15 +466,18 @@ function setupOverlay(chart) {
         ctx.clearRect(0, 0, overlay.width, overlay.height);
         if (!temperatureChart) return;
 
-        const xScale = temperatureChart.scales.x;
-        const yScale = temperatureChart.scales.y;
-        if (!xScale || !yScale) return;
-        const { top, bottom } = yScale;
+        const bb = getPlotBbox();
+        if (!bb) return;
+        const dpr    = devicePixelRatio;
+        const left   = bb.left   / dpr;
+        const top    = bb.top    / dpr;
+        const right  = (bb.left + bb.width)  / dpr;
+        const bottom = (bb.top  + bb.height) / dpr;
         const regionH = bottom - top;
 
-        // Preview fill: A placed, B not yet, cursor in chart area
-        if (markerA && !markerB && cursorX >= xScale.left && cursorX <= xScale.right) {
-            const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
+        // Preview fill: A placed, B not yet, cursor in plot area
+        if (markerA && !markerB && cursorX >= left && cursorX <= right) {
+            const ax = getCanvasXForIndex(markerA.labelIndex);
             if (ax >= 0) {
                 ctx.save();
                 ctx.fillStyle = 'rgba(150,200,255,0.10)';
@@ -440,8 +488,8 @@ function setupOverlay(chart) {
 
         // Solid region between both placed markers
         if (markerA && markerB) {
-            const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
-            const bx = getCanvasXForIndex(temperatureChart, markerB.labelIndex);
+            const ax = getCanvasXForIndex(markerA.labelIndex);
+            const bx = getCanvasXForIndex(markerB.labelIndex);
             if (ax >= 0 || bx >= 0) {
                 ctx.save();
                 ctx.fillStyle = 'rgba(79,142,247,0.06)';
@@ -452,16 +500,16 @@ function setupOverlay(chart) {
 
         // Draw marker lines on top of fills
         if (markerA) {
-            const ax = getCanvasXForIndex(temperatureChart, markerA.labelIndex);
+            const ax = getCanvasXForIndex(markerA.labelIndex);
             if (ax >= 0) drawMarkerLine(ctx, ax, '#f5c518', 'right');
         }
         if (markerB) {
-            const bx = getCanvasXForIndex(temperatureChart, markerB.labelIndex);
+            const bx = getCanvasXForIndex(markerB.labelIndex);
             if (bx >= 0) drawMarkerLine(ctx, bx, '#4fc3f7', 'left');
         }
 
-        // Crosshair
-        if (cursorX < 0 || cursorX < xScale.left || cursorX > xScale.right) return;
+        // Crosshair vertical line
+        if (cursorX < 0 || cursorX < left || cursorX > right) return;
         ctx.save();
         ctx.strokeStyle = 'rgba(255,255,255,0.2)';
         ctx.lineWidth = 1;
@@ -473,16 +521,10 @@ function setupOverlay(chart) {
         ctx.restore();
     }
 
-    // Mouse events on the chart canvas (pointer-events enabled there)
-    const chartCanvas = document.getElementById('temperatureChart');
-    chartCanvas.style.cursor = 'crosshair';
+    // ── Tooltip helpers ───────────────────────────────────────────────────
 
-    function extractTimeFromLabel(label) {
-        // Parse label to extract time in HH:MM AM/PM format
-        // Assume label format is "YYYY-MM-DD HH:MM" or similar ISO-like format
-        const date = new Date(label);
-        if (isNaN(date)) return label; // fallback if parsing fails
-        
+    function formatTimeFromUnixSec(unixSec) {
+        const date = new Date(unixSec * 1000);
         let hours = date.getHours();
         const minutes = String(date.getMinutes()).padStart(2, '0');
         const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -490,77 +532,78 @@ function setupOverlay(chart) {
         return `${hours}:${minutes} ${ampm}`;
     }
 
-    function getClosestVisibleTempAtIndex(idx, canvasY) {
-        // Get the temperature and color from the visible dataset whose canvas position is closest to canvasY
-        const yScale = temperatureChart.scales.y;
-        if (!yScale) return { temp: null, color: null };
-
-        let closestDatasetIndex = -1;
-        let closestDistance = Infinity;
-
-        for (let i = 0; i < temperatureChart.data.datasets.length; i++) {
-            if (!temperatureChart.isDatasetVisible(i)) continue;
-            
-            const data = temperatureChart.data.datasets[i].data;
-            if (data[idx]?.y == null) continue;
-
-            const tempValue = data[idx].y;
-            // Convert temperature value to canvas Y coordinate
-            const datasetCanvasY = yScale.getPixelForValue(tempValue);
-            const distance = Math.abs(canvasY - datasetCanvasY);
-
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestDatasetIndex = i;
-            }
-        }
-
-        if (closestDatasetIndex >= 0) {
-            const dataset = temperatureChart.data.datasets[closestDatasetIndex];
-            return {
-                temp: dataset.data[idx].y,
-                color: dataset.borderColor
-            };
+    function getClosestVisibleTempAtIndex(idx, cssY) {
+        if (!temperatureChart) return { temp: null, color: null };
+        const bb = getPlotBbox();
+        if (!bb) return { temp: null, color: null };
+        const dpr = devicePixelRatio;
+        let closestIdx = -1, closestDist = Infinity;
+        rawSeriesData.forEach((yArr, i) => {
+            if (!seriesVisible[i]) return;
+            const v = yArr[idx];
+            if (v == null || isNaN(v)) return;
+            const yPx = temperatureChart.valToPos(v, 'y') + bb.top / dpr;
+            const dist = Math.abs(cssY - yPx);
+            if (dist < closestDist) { closestDist = dist; closestIdx = i; }
+        });
+        if (closestIdx >= 0) {
+            return { temp: rawSeriesData[closestIdx][idx], color: seriesMeta[closestIdx].stroke };
         }
         return { temp: null, color: null };
     }
 
-    chartCanvas.addEventListener('mousemove', (e) => {
+    // ── Mouse events — attach to uPlot's .u-over div ──────────────────────
+    // uPlot creates a div.u-over that receives pointer events over the plot area.
+    // We wait for it to exist (it's created synchronously on uPlot construction).
+    function getOver() {
+        return temperatureChart?.over ?? null;
+    }
+
+    // We need to re-attach listeners whenever the chart is re-created.
+    // Store them on the overlay element and call attachMouseListeners from displayChart.
+    let mouseDown = false;
+    let mouseDownX = 0;
+    let lastClickTime = 0;
+
+    function onMouseMove(e) {
         if (!temperatureChart) return;
-        const rect = chartCanvas.getBoundingClientRect();
-        cursorX = (e.clientX - rect.left) * (chartCanvas.width  / rect.width);
-        cursorY = (e.clientY - rect.top)  * (chartCanvas.height / rect.height);
+        const rect = container.getBoundingClientRect();
+        cursorX = e.clientX - rect.left;
+        cursorY = e.clientY - rect.top;
 
-        const idx = getLabelIndexAt(temperatureChart, cursorX);
+        // Convert CSS coords to data index via uPlot
+        const bb = getPlotBbox();
+        if (!bb) { drawCrosshair(); return; }
+        const dpr = devicePixelRatio;
+        const plotLeft = bb.left / dpr;
+        const cssXInPlot = cursorX - plotLeft;
+        const xVal = temperatureChart.posToVal(cssXInPlot, 'x');
+        const idx = getIndexForTime(xVal / 60);
 
-        if (idx >= 0 && chartLabels[idx]) {
-            const time = extractTimeFromLabel(chartLabels[idx]);
+        if (idx >= 0 && rawTimestamps[idx]) {
+            const time = formatTimeFromUnixSec(rawTimestamps[idx]);
             const { temp, color } = getClosestVisibleTempAtIndex(idx, cursorY);
-            
-            // Clear tooltip and rebuild with colored temp
+
             tooltip.innerHTML = '';
             const timeSpan = document.createElement('span');
             timeSpan.textContent = time;
             tooltip.appendChild(timeSpan);
-            
+
             if (temp != null) {
                 const bullet = document.createElement('span');
                 bullet.textContent = ' • ';
                 tooltip.appendChild(bullet);
-                
                 const tempSpan = document.createElement('span');
                 tempSpan.textContent = temp.toFixed(2) + ' °C';
                 tempSpan.style.color = color;
                 tempSpan.style.fontWeight = 'bold';
                 tooltip.appendChild(tempSpan);
             }
-            
+
             tooltip.style.display = 'block';
-            // position relative to container
             const cRect = container.getBoundingClientRect();
             let tx = e.clientX - cRect.left;
             const ty = Math.max(0, e.clientY - cRect.top - 50);
-            // clamp so tooltip stays inside
             const tw = tooltip.offsetWidth;
             tx = Math.max(tw / 2 + 4, Math.min(cRect.width - tw / 2 - 4, tx));
             tooltip.style.left = tx + 'px';
@@ -574,71 +617,79 @@ function setupOverlay(chart) {
             updateStatsPanel(idx);
         }
         drawCrosshair();
-    });
+    }
 
-    chartCanvas.addEventListener('mouseleave', () => {
+    function onMouseLeave() {
         cursorX = cursorY = -1;
         tooltip.style.display = 'none';
         if (markerA && !markerB) updateMarkerBar();
         drawCrosshair();
-    });
+    }
 
-    let mouseDown = false;
-    let mouseX = 0;
-    let lastClickTime = 0;
-
-    chartCanvas.addEventListener('mousedown', (e) => {
+    function onMouseDown(e) {
         mouseDown = true;
-        mouseX = 0; // reset delta before each new press
-        const rect = chartCanvas.getBoundingClientRect();
-        mouseX = (e.clientX - rect.left) * (chartCanvas.width / rect.width);
-    });
+        const rect = container.getBoundingClientRect();
+        mouseDownX = e.clientX - rect.left;
+    }
 
-    chartCanvas.addEventListener('mouseup', (e) => {
+    function onMouseUp(e) {
+        const rect = container.getBoundingClientRect();
+        mouseDownX -= (e.clientX - rect.left);
         mouseDown = false;
-        const rect = chartCanvas.getBoundingClientRect();
-        mouseX -= (e.clientX - rect.left) * (chartCanvas.width / rect.width);
-    });
+    }
 
-    chartCanvas.addEventListener('click', (e) => {
+    function onClick(e) {
         const now = Date.now();
-        if (now - lastClickTime < 300) return; // debounce accidental double-clicks
-        if (!temperatureChart || !chartLabels.length || mouseDown || Math.abs(mouseX) > 5) return;
+        if (now - lastClickTime < 300) return;
+        if (!temperatureChart || !rawTimestamps.length || Math.abs(mouseDownX) > 5) return;
         lastClickTime = now;
-        const rect = chartCanvas.getBoundingClientRect();
-        const cx = (e.clientX - rect.left) * (chartCanvas.width / rect.width);
-        const idx = getLabelIndexAt(temperatureChart, cx);
+
+        const bb = getPlotBbox();
+        if (!bb) return;
+        const dpr = devicePixelRatio;
+        const rect = container.getBoundingClientRect();
+        const cssX = e.clientX - rect.left;
+        const plotLeft = bb.left / dpr;
+        const cssXInPlot = cssX - plotLeft;
+        if (cssXInPlot < 0 || cssXInPlot > bb.width / dpr) return;
+        const xVal = temperatureChart.posToVal(cssXInPlot, 'x');
+        const idx = getIndexForTime(xVal / 60);
         if (idx < 0) return;
 
         if (markerA && markerB) {
-            // Both placed: clear both
             markerA = markerB = null;
         } else if (markerA && !markerB) {
-            // Place second marker
             markerB = { labelIndex: idx };
         } else {
-            // Place first marker
             markerA = { labelIndex: idx };
         }
         updateMarkerBar();
         updateStatsPanel();
         drawCrosshair();
-    });
+    }
 
-    chartCanvas.addEventListener('contextmenu', (e) => {
+    function onContextMenu(e) {
         e.preventDefault();
         if (!markerA && !markerB) return;
         markerA = markerB = null;
         updateMarkerBar();
         updateStatsPanel();
         drawCrosshair();
-    });
+    }
 
-    // Also redraw overlay when chart updates (zoom/pan)
-    const origDraw = chart.draw.bind(chart);
-    chart.draw = function(...args) {
-        origDraw(...args);
-        drawCrosshair();
+    // Attach to uPlot's over element (and re-attach after chart rebuild)
+    overlay._attachOverlayListeners = function(over) {
+        // Abort any previous set of listeners so re-loads don't stack them
+        if (overlay._overAbortCtrl) overlay._overAbortCtrl.abort();
+        overlay._overAbortCtrl = new AbortController();
+        const signal = overlay._overAbortCtrl.signal;
+        over.style.cursor = 'crosshair';
+        over.addEventListener('mousemove',   onMouseMove,   { signal });
+        over.addEventListener('mouseleave',  onMouseLeave,  { signal });
+        over.addEventListener('mousedown',   onMouseDown,   { signal });
+        over.addEventListener('mouseup',     onMouseUp,     { signal });
+        over.addEventListener('click',       onClick,       { signal });
+        over.addEventListener('contextmenu', onContextMenu, { signal });
     };
 
     // Clear markers button
@@ -648,6 +699,9 @@ function setupOverlay(chart) {
         updateStatsPanel();
         drawCrosshair();
     });
+
+    // Expose drawCrosshair so displayChart can trigger it from uPlot hooks
+    overlay._drawCrosshair = drawCrosshair;
 }
 
 // ─── Dynamic X-axis marker spacing ────────────────────────────────────────
@@ -687,17 +741,18 @@ function getTimeInMinutes(label) {
 }
 
 function getIndexForTime(minutes) {
-    // Binary search: closest index in chartLabels for a given minute value
-    if (!chartLabels.length) return 0;
-    let lo = 0, hi = chartLabels.length - 1;
+    // Binary search: closest index in rawTimestamps (unix seconds) for a given minute value
+    if (!rawTimestamps.length) return 0;
+    const targetSec = minutes * 60;
+    let lo = 0, hi = rawTimestamps.length - 1;
     while (lo < hi) {
         const mid = (lo + hi) >> 1;
-        if (getTimeInMinutes(chartLabels[mid]) < minutes) lo = mid + 1;
+        if (rawTimestamps[mid] < targetSec) lo = mid + 1;
         else hi = mid;
     }
     if (lo > 0) {
-        const dHi  = Math.abs(getTimeInMinutes(chartLabels[lo])     - minutes);
-        const dLo  = Math.abs(getTimeInMinutes(chartLabels[lo - 1]) - minutes);
+        const dHi = Math.abs(rawTimestamps[lo]     - targetSec);
+        const dLo = Math.abs(rawTimestamps[lo - 1] - targetSec);
         if (dLo < dHi) return lo - 1;
     }
     return lo;
@@ -739,66 +794,6 @@ function getXAxisTicks(minTime, maxTime, pixelWidth) {
     return ticks;
 }
 
-// ─── LTTB downsampling ────────────────────────────────────────────────────
-// Largest-Triangle-Three-Buckets: preserves visual shape while drastically
-// reducing point count. Stats/markers always read from ds._rawData instead.
-function lttbDownsample(data, targetPoints) {
-    const n = data.length;
-    if (targetPoints >= n) return data;
-    if (targetPoints <= 2) return [data[0], data[n - 1]];
-
-    const sampled = [data[0]];
-    const bucketSize = (n - 2) / (targetPoints - 2);
-    let a = 0;
-
-    for (let i = 0; i < targetPoints - 2; i++) {
-        const bucketStart = Math.floor((i + 1) * bucketSize) + 1;
-        const bucketEnd   = Math.min(Math.floor((i + 2) * bucketSize) + 1, n - 1);
-
-        // Average of the next bucket for lookahead
-        const nextStart = bucketEnd;
-        const nextEnd   = Math.min(Math.floor((i + 3) * bucketSize) + 1, n - 1);
-        let avgX = 0, avgY = 0, avgCount = 0;
-        for (let j = nextStart; j < nextEnd; j++) {
-            if (data[j].y != null) { avgX += data[j].x; avgY += data[j].y; avgCount++; }
-        }
-        if (avgCount) { avgX /= avgCount; avgY /= avgCount; }
-        else { avgX = data[Math.floor((nextStart + nextEnd) / 2)]?.x ?? 0; avgY = 0; }
-
-        // Pick the point in this bucket that forms the largest triangle
-        let maxArea = -1, selectedIdx = bucketStart;
-        const ax = data[a].x, ay = data[a].y ?? 0;
-        for (let j = bucketStart; j < bucketEnd; j++) {
-            if (data[j].y == null) continue;
-            const area = Math.abs((ax - avgX) * (data[j].y - ay) - (ax - data[j].x) * (avgY - ay)) * 0.5;
-            if (area > maxArea) { maxArea = area; selectedIdx = j; }
-        }
-        sampled.push(data[selectedIdx]);
-        a = selectedIdx;
-    }
-
-    sampled.push(data[n - 1]);
-    return sampled;
-}
-
-function resampleDatasets(chart) {
-    const xScale = chart.scales?.x;
-    if (!xScale) return;
-    const pixelWidth = Math.max(100, xScale.right - xScale.left);
-    const targetPoints = Math.ceil(pixelWidth * 2); // ~2 pts/pixel is plenty
-
-    // Slice to only the visible index range (+1 padding each side for clean edge rendering)
-    const minIdx = Math.max(0, getIndexForTime(xScale.min) - 1);
-    const maxIdx = Math.min(chartLabels.length - 1, getIndexForTime(xScale.max) + 1);
-
-    chart.data.datasets.forEach((ds, i) => {
-        if (!ds._rawData || !chart.isDatasetVisible(i)) return; // only parse through sets we can see
-        const visibleSlice = ds._rawData.slice(minIdx, maxIdx + 1);
-        ds.data = lttbDownsample(visibleSlice, targetPoints);
-    });
-    chart.update('none');
-}
-
 // ─── Chart creation ────────────────────────────────────────────────────────
 async function displayChart(startDate, endDate) {
     const submitBtn = document.getElementById('submitBtn');
@@ -828,24 +823,30 @@ async function displayChart(startDate, endDate) {
 
     const { result: data } = await job.fetchResult();
     chartLabels = data.map(entry => entry["Date-Time"]);
-    const tankConfigs = generateTankConfigs(data);
 
-    const ctx = document.getElementById('temperatureChart').getContext('2d');
+    const { uplotData, meta, visible } = generateTankConfigs(data);
+
+    // Snapshot visibility before destroying old chart
     if (temperatureChart) {
-        // Snapshot which datasets the user had visible so we can restore them
         savedVisibility = new Set(
-            temperatureChart.data.datasets
-                .filter((_, i) => temperatureChart.isDatasetVisible(i))
-                .map(ds => ds.label)
+            seriesMeta
+                .filter((_, i) => seriesVisible[i])
+                .map(m => m.label)
         );
         temperatureChart.destroy();
         temperatureChart = null;
     }
 
-    // Re-apply the previous selection if one exists
+    // Store columnar data globally
+    rawTimestamps = uplotData[0];          // Float64Array of unix seconds
+    rawSeriesData = uplotData.slice(1);    // Float64Array[] per series
+    seriesMeta    = meta;
+    seriesVisible = visible;               // all false by default
+
+    // Re-apply previous visibility
     if (savedVisibility !== null) {
-        tankConfigs.forEach(cfg => {
-            if (savedVisibility.has(cfg.label)) cfg.hidden = false;
+        seriesMeta.forEach((m, i) => {
+            if (savedVisibility.has(m.label)) seriesVisible[i] = true;
         });
     }
 
@@ -857,130 +858,226 @@ async function displayChart(startDate, endDate) {
     const emptyState = document.getElementById('empty-state');
     if (emptyState) emptyState.style.display = 'none';
 
-    // Use the form date range as the initial visible window (end date = end of that day)
-    const xFormMin = getTimeInMinutes(getPSTTime(startDate));
-    const xFormMax = getTimeInMinutes(getPSTTime(endDate)) + 24 * 60; // include the full end day
+    // X range: full data extent, also saved for reset-zoom
+    _initXMin = rawTimestamps.length ? rawTimestamps[0] : 0;
+    _initXMax = rawTimestamps.length ? rawTimestamps[rawTimestamps.length - 1] : 1;
 
-    const xMin = chartLabels.length ? getTimeInMinutes(chartLabels[0]) : xFormMin;
-    const xMax = chartLabels.length ? getTimeInMinutes(chartLabels[chartLabels.length - 1]) : xFormMax;
-
-    temperatureChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            datasets: tankConfigs
+    // ── Build uPlot series config ────────────────────────────────────────
+    const uplotSeries = [
+        // series[0] = x axis
+        {
+            label: 'Time',
+            value: (u, v) => v == null ? '' : new Date(v * 1000).toLocaleString(),
         },
-        options: {
-            animation: false,
-            responsive: true,
-            maintainAspectRatio: false,
-            parsing: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
-            plugins: {
-                zoom: {
-                    limits: {
-                        x: { min: xMin, max: xMax },
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'x',
-                        threshold: 10,
-                        onPan: ({ chart }) => { resampleDatasets(chart); fitYAxis(chart); updateStatsPanel(); },
-                        onPanComplete: ({ chart }) => { resampleDatasets(chart); fitYAxis(chart);  },
-                    },
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                            speed: 0.1,
-                        },
-                        pinch: {
-                            enabled: true,
-                        },
-                        mode: 'x',
-                        onZoom: ({ chart }) => { resampleDatasets(chart); fitYAxis(chart); updateStatsPanel(); },
-                        onZoomComplete: ({ chart }) => { resampleDatasets(chart); fitYAxis(chart); },
-                    },
-                },
-                legend: { display: false },
-                title: { display: false },
-                tooltip: {
-                    enabled: true,
-                    backgroundColor: 'rgba(26,29,39,0.95)',
-                    borderColor: 'rgba(255,255,255,0.08)',
-                    borderWidth: 1,
-                    titleColor: '#eaedf4',
-                    bodyColor: '#8b92a8',
-                    padding: 10,
-                    filter: item => !item.dataset.hidden,
-                    callbacks: {
-                        label: ctx => {
-                            const val = ctx.raw?.y;
-                            return val != null ? `  ${ctx.dataset.label.replace(' (°C)','')}  ${val.toFixed(2)} °C` : null;
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    type: 'linear',
-                    min: xMin,
-                    max: xMax,
-                    // Replace Chart.js auto-ticks with our exact time-aligned ticks
-                    afterBuildTicks: function(scale) {
-                        const pixelWidth = scale.right - scale.left;
-                        if (pixelWidth <= 0 || !chartLabels.length) return;
-                        const axisTicks = getXAxisTicks(scale.min, scale.max, pixelWidth);
-                        scale.ticks = axisTicks.map(t => ({ value: t.time }));
-                    },
-                    ticks: {
-                        color: '#555d75',
-                        maxRotation: 0,
-                        font: { size: 11 },
-                        // 'this' is the scale; value is minutes since epoch
-                        callback: function(value) {
-                            const stepSize = calcTimeStepSize(this.min, this.max, this.right - this.left);
-                            return formatTimeLabel(value, stepSize);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.04)'
-                    }
-                },
-                y: {
-                    ticks: {
-                        color: '#555d75',
-                        font: { size: 11 },
-                        callback: v => (Math.round(v * 100) / 100) + ' °C'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.04)'
-                    }
-                }
-            },
-            onHover: null  // don't fight with our overlay
-        }
-    });
+        // series[1..N] = y series
+        ...seriesMeta.map((m, i) => (
+            {
+            label:    m.label,
+            stroke:   m.stroke,
+            // fill:     m.fill,
+            width:    1.5,
+            show:     seriesVisible[i],
+            spanGaps: false,
+            value:    (u, v) => v == null ? '' : v.toFixed(2) + ' °C',
+            scale: "C",
+        })),
+    ];
 
-    // Sync checkboxes → visibility
-    const letters = ['A', 'B', 'C', 'D'];
-    const states  = ['warm', 'cool'];
-    let di = 0;
-    for (const letter of letters) {
-        for (let i = 1; i <= 4; i++) {
-            for (const state of states) {
-                const cb = document.getElementById('tank' + letter + i + state);
-                if (cb) temperatureChart.data.datasets[di].hidden = !cb.checked;
-                di++;
-            }
-        }
+    // ── Wheel-zoom + drag-pan plugin ─────────────────────────────────────
+    function wheelZoomPanPlugin() {
+        let xMinFull, xMaxFull;
+        return {
+            hooks: {
+                ready(u) {
+                    xMinFull = _initXMin;
+                    xMaxFull = _initXMax;
+                    const over = u.over;
+                    const ac = new AbortController();
+                    const signal = ac.signal;
+
+                    // Drag pan (left-button drag)
+                    let dragStartX = null, scaleMinAtDrag, scaleMaxAtDrag;
+                    over.addEventListener('mousedown', e => {
+                        if (e.button !== 0) return;
+                        dragStartX     = e.clientX;
+                        scaleMinAtDrag = u.scales.x.min;
+                        scaleMaxAtDrag = u.scales.x.max;
+                    }, { signal });
+                    window.addEventListener('mousemove', e => {
+                        if (dragStartX == null) return;
+                        const dx = e.clientX - dragStartX;
+                        const unitsPerPx = (scaleMaxAtDrag - scaleMinAtDrag) / u.bbox.width * devicePixelRatio;
+                        let nMin = scaleMinAtDrag - dx * unitsPerPx;
+                        let nMax = scaleMaxAtDrag - dx * unitsPerPx;
+                        // clamp to full range
+                        if (nMin < xMinFull) { nMax += xMinFull - nMin; nMin = xMinFull; }
+                        if (nMax > xMaxFull) { nMin -= nMax - xMaxFull; nMax = xMaxFull; }
+                        u.setScale('x', { min: nMin, max: nMax });
+                        fitYAxis();
+                        updateStatsPanel();
+                        document.getElementById('overlay-canvas')?._drawCrosshair?.();
+                    }, { signal });
+                    window.addEventListener('mouseup', () => { dragStartX = null; }, { signal });
+
+                    // Wheel zoom (x-only, centred on cursor)
+                    over.addEventListener('wheel', e => {
+                        e.preventDefault();
+                        const factor = e.deltaY < 0 ? 0.8 : 1.25;
+                        const { min, max } = u.scales.x;
+                        const range = max - min;
+                        const leftPct = u.cursor.left / (u.bbox.width / devicePixelRatio);
+                        const xFocus  = min + leftPct * range;
+                        let nMin = xFocus - leftPct * range * factor;
+                        let nMax = nMin + range * factor;
+                        // clamp
+                        if (nMin < xMinFull) { nMax += xMinFull - nMin; nMin = xMinFull; }
+                        if (nMax > xMaxFull) { nMin -= nMax - xMaxFull; nMax = xMaxFull; }
+                        nMin = Math.max(nMin, xMinFull);
+                        nMax = Math.min(nMax, xMaxFull);
+                        u.setScale('x', { min: nMin, max: nMax });
+                        fitYAxis();
+                        updateStatsPanel();
+                        document.getElementById('overlay-canvas')?._drawCrosshair?.();
+                    }, { passive: false, signal });
+
+                    // Clean up when uPlot is destroyed
+                    u.hooks.destroy = u.hooks.destroy || [];
+                    u.hooks.destroy.push(() => ac.abort());
+                },
+            },
+        };
     }
-    temperatureChart.update('none');
-    resampleDatasets(temperatureChart);
-    updateCustomLegend(temperatureChart);
-    setupOverlay(temperatureChart);
-    fitYAxis(temperatureChart);
+
+    // ── Mount point: uPlot mounts into #uplot-container ──────────────────
+    const mountEl = document.getElementById('uplot-container');
+    mountEl.innerHTML = '';   // clear any previous instance
+
+    const containerEl = document.getElementById('chart-container');
+    const w = containerEl.clientWidth;
+    const h = containerEl.clientHeight;
+
+    const opts = {
+        width:  w,
+        height: h,
+        legend: { show: false },
+        cursor: {
+            show:  true,
+            drag:  { setScale: false, x: false, y: false }, // we handle drag ourselves
+            // sync:  { key: null },
+            // points: { show: false },
+        },
+        series: uplotSeries,
+        axes: [
+            // x-axis
+            {
+                stroke:  '#555d75',
+                grid:    { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+                ticks:   { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+                font:    '11px Inter, system-ui, sans-serif',
+                // Custom label formatter: uPlot passes unix-seconds
+                values: (u, splits) => {
+                    const rangeS = u.scales.x.max - u.scales.x.min;
+                    const rangeMin = rangeS / 60;
+                    const pixW = u.bbox.width / devicePixelRatio;
+                    const stepMin = calcTimeStepSize(u.scales.x.min / 60, u.scales.x.max / 60, pixW);
+                    return splits.map(s => formatTimeLabel(s / 60, stepMin));
+                },
+                // Use our nice-interval splitter (uPlot splits are unix-seconds)
+                splits: (u, axisIdx, scaleMin, scaleMax) => {
+                    const pixW = u.bbox.width / devicePixelRatio;
+                    const ticks = getXAxisTicks(scaleMin / 60, scaleMax / 60, pixW);
+                    return ticks.map(t => t.time * 60);
+                },
+                size: 40,
+                gap:  6,
+            },
+            // y-axis
+            // {
+            //     stroke:  '#555d75',
+            //     grid:    { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+            //     ticks:   { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+            //     font:    '11px Inter, system-ui, sans-serif',
+            //     values:  (u, splits) => splits.map(v => v == null ? '' : v.toFixed(1) + ' °C'),
+            //     size:    55,
+            //     gap:     6,
+            // },
+            {
+                scale: "C",
+                values: (self, ticks) => ticks.map(rawValue => rawValue + "° C"),
+                grid: {show: false},
+                stroke:  '#555d75',
+                grid:    { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+                ticks:   { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+                font:    '11px Inter, system-ui, sans-serif',
+                size:    (self, values, axisIdx, cycleNum) => {
+                    // On the initial call uPlot passes values=null; measure a worst-case
+                    // label so the axis slot is large enough from the very first layout pass.
+                    const probe = values?.length ? values : ['-99.999° C'];
+                    const tc = _yAxisMeasureCtx ??= document.createElement('canvas').getContext('2d');
+                    tc.font = '11px Inter, system-ui, sans-serif';
+                    const maxW = probe.reduce((m, v) => Math.max(m, v ? tc.measureText(String(v)).width : 0), 0);
+                    return Math.ceil(maxW) + 16;
+                },
+                gap:     6,
+            },
+            {
+                scale: "F",
+                values: (self, ticks) => ticks.map(rawValue => rawValue + "° F"),
+                stroke:  '#555d75',
+                grid: {show: false},
+                font:    '11px Inter, system-ui, sans-serif',
+                size:    (self, values, axisIdx, cycleNum) => {
+                    const probe = values?.length ? values : ['-199.9° F'];
+                    const tc = _yAxisMeasureCtx ??= document.createElement('canvas').getContext('2d');
+                    tc.font = '11px Inter, system-ui, sans-serif';
+                    const maxW = probe.reduce((m, v) => Math.max(m, v ? tc.measureText(String(v)).width : 0), 0);
+                    return Math.ceil(maxW) + 16;
+                },
+                gap:     6,
+                side: 1, // right side
+            },
+        ],
+        scales: {
+            x: { time: true, auto: false, min: _initXMin, max: _initXMax },
+            y: { auto: false },
+            "F": {
+                from: "C",
+                range: (self, fromMin, fromMax) => [
+                    (fromMin * 9/5) + 32,
+                    (fromMax * 9/5) + 32,
+                ],
+            }
+        },
+        plugins: [ wheelZoomPanPlugin() ],
+        hooks: {
+            draw: [
+                u => {
+                    const overlay = document.getElementById('overlay-canvas');
+                    overlay?._drawCrosshair?.();
+                },
+            ],
+        },
+    };
+
+    temperatureChart = new uPlot(opts, uplotData, mountEl);
+
+    // Resize uPlot when chart-container resizes
+    new ResizeObserver(() => {
+        if (!temperatureChart) return;
+        const cw = containerEl.clientWidth;
+        const ch = containerEl.clientHeight;
+        temperatureChart.setSize({ width: cw, height: ch });
+    }).observe(containerEl);
+
+    // Set up overlay (once per page load; idempotent after first call)
+    const overlay = document.getElementById('overlay-canvas');
+    if (!overlay._drawCrosshair) setupOverlay();
+
+    // Wire overlay mouse listeners to the new uPlot .u-over element
+    overlay._attachOverlayListeners(temperatureChart.over);
+
+    fitYAxis();
+    updateCustomLegend();
     updateStatsPanel();
 
     if (submitBtn) {
@@ -989,34 +1086,31 @@ async function displayChart(startDate, endDate) {
     }
 }
 
-function fitYAxis(chart) {
-    if (!chart?.scales) return;
-    const xScale = chart.scales.x;
-    const yScale = chart.scales.y;
-    if (!xScale || !yScale || !chartLabels.length) return;
+function fitYAxis() {
+    if (!temperatureChart || _fittingY) return;
+    const xMin = temperatureChart.scales.x.min;
+    const xMax = temperatureChart.scales.x.max;
+    if (!rawTimestamps.length) return;
 
     const DEFAULT_MIN = -1, DEFAULT_MAX = 1;
     const EPSILON = 1e-9, RANGE_PAD = 1;
 
-    // xScale.min/max are in minutes; convert to data indices
-    const minIdx = Math.max(0, getIndexForTime(xScale.min));
-    const maxIdx = Math.min(chartLabels.length - 1, getIndexForTime(xScale.max));
+    // xScale min/max are unix seconds; getIndexForTime uses minutes
+    const minIdx = Math.max(0, getIndexForTime(xMin / 60));
+    const maxIdx = Math.min(rawTimestamps.length - 1, getIndexForTime(xMax / 60));
     if (minIdx > maxIdx) return;
 
-    const d = chart.data.datasets.length;
     let globalMin = Infinity, globalMax = -Infinity;
 
-    for (let i = 0; i < d; i++) {
-        if (!chart.isDatasetVisible(i)) continue;
-        const ds = chart.data.datasets[i]
-        const src = (ds._rawData ?? ds.data);
+    rawSeriesData.forEach((yArr, i) => {
+        if (!seriesVisible[i]) return;
         for (let k = minIdx; k <= maxIdx; k++) {
-            const v = src[k]?.y;
-            if (v == null || v !== v) continue; // null or NaN
+            const v = yArr[k];
+            if (v == null || isNaN(v)) continue;
             if (v < globalMin) globalMin = v;
             if (v > globalMax) globalMax = v;
         }
-    }
+    });
 
     if (!isFinite(globalMin) || !isFinite(globalMax)) {
         globalMin = DEFAULT_MIN;
@@ -1037,14 +1131,25 @@ function fitYAxis(chart) {
         newMax += RANGE_PAD;
     }
 
-    const yOpts = chart.options.scales.y;
-    const oldMin = typeof yOpts.min === 'number' ? yOpts.min : NaN;
-    const oldMax = typeof yOpts.max === 'number' ? yOpts.max : NaN;
-    if (nearlyEqual(oldMin, newMin, EPSILON) && nearlyEqual(oldMax, newMax, EPSILON)) return;
+    newMin = Math.round(newMin * 100) / 100;
+    newMax = Math.round(newMax * 100) / 100;
 
-    yOpts.min = Math.round(newMin * 100) / 100;
-    yOpts.max = Math.round(newMax * 100) / 100;
-    chart.update('none');
+    // Rounding can collapse a tight range to newMin === newMax; re-pad if so.
+    if (newMin >= newMax) {
+        newMin -= RANGE_PAD;
+        newMax += RANGE_PAD;
+    }
+
+    const oldMin = temperatureChart.scales.y?.min;
+    const oldMax = temperatureChart.scales.y?.max;
+    if (nearlyEqual(oldMin ?? NaN, newMin, EPSILON) && nearlyEqual(oldMax ?? NaN, newMax, EPSILON)) return;
+
+    _fittingY = true;
+    try {
+        temperatureChart.setScale('y', { min: newMin, max: newMax });
+    } finally {
+        _fittingY = false;
+    }
 }
 
 // ─── Progress bar ──────────────────────────────────────────────────────────
@@ -1095,11 +1200,8 @@ async function pollJobStatus(fetchJob, interval = 800) {
 // ─── Reset zoom button ─────────────────────────────────────────────────────
 document.getElementById('reset-zoom-btn')?.addEventListener('click', () => {
     if (!temperatureChart) return;
-    temperatureChart.resetZoom();
-    // clear manual y bounds so fitYAxis can recalculate
-    delete temperatureChart.options.scales.y.min;
-    delete temperatureChart.options.scales.y.max;
-    fitYAxis(temperatureChart);
+    temperatureChart.setScale('x', { min: _initXMin, max: _initXMax });
+    fitYAxis();
 });
 
 // ─── Form submit ───────────────────────────────────────────────────────────
