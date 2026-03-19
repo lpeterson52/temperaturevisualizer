@@ -123,40 +123,49 @@ header h1 {
 }
 
 #submitBtn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-family: var(--font);
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 9px 20px;
-  cursor: pointer;
-  transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
-  white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 9px 20px;
+    cursor: pointer;
+    transition: background var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
+    white-space: nowrap;
 }
 
-#submitBtn:hover {
-  background: #6aa0ff;
-  box-shadow: 0 0 18px var(--accent-glow);
-  transform: translateY(-1px);
+#submitBtn:hover:not(:disabled) {
+    background: #6aa0ff;
+    box-shadow: 0 0 18px var(--accent-glow);
+    transform: translateY(-1px);
 }
 
-#submitBtn:active {
-  transform: translateY(0);
+#submitBtn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+#submitBtn:disabled {
+    background: color-mix(var(--accent-dim), var(--red));
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: none;
+    transform: none;
 }
 
 #submitBtn .btn-icon {
-  font-size: 1rem;
-  transition: transform var(--transition);
+    font-size: 1rem;
+    transition: transform var(--transition);
 }
 
-#submitBtn:hover .btn-icon {
-  transform: translateX(3px);
+#submitBtn:hover:not(:disabled) .btn-icon {
+    transform: translateX(3px);
 }
+
 
 /* ─── Main ─────────────────────────────────────────────────────────────── */
 main {
@@ -297,6 +306,8 @@ main {
   gap: 12px;
   pointer-events: none;
   z-index: 5;
+  opacity: 1;
+  transition: opacity .5s cubic-bezier(0.55, 0.055, 0.675, 0.19);
 }
 
 #empty-state .empty-icon {
@@ -309,6 +320,10 @@ main {
   font-size: 0.95rem;
   text-align: center;
   max-width: 280px;
+}
+
+#empty-state.hidden {
+  opacity: 0;
 }
 
 /* ─── Marker Bar ───────────────────────────────────────────────────────── */
@@ -482,7 +497,6 @@ main {
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.8rem;
-  width: 95%; /* little gaps between elements */
   /* fully transparent, but transition only has to worry about the alpha channel */
   border: color-mix(in srgb, var(--tank-color) 0%, transparent) 1px solid;
   /* color: var(--text-secondary); */
@@ -522,12 +536,12 @@ main {
 .legend-tank-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: .33rem;
 }
 
 .legend-tank-grid .legend-item {
   padding: 3px 6px;
   font-size: 0.74rem;
-  gap: 5px;
 }
 
 /* ─── Stats Panel ──────────────────────────────────────────────────────── */
