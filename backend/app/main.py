@@ -1,9 +1,10 @@
-from typing import Union
+from datetime import timedelta
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.cache import refresh_cache, populate_cache, router as cache_router
+from app.services.csv_merge import run_periodic_job_cleanup, get_job_dict
 from app.api.routes import router as merge_router
 
 
@@ -13,6 +14,7 @@ async def lifespan(app: FastAPI):
     await populate_cache()
     print("Cache populated, setting up asyncio refresh task")
     asyncio.create_task(refresh_cache())
+    asyncio.create_task(run_periodic_job_cleanup(get_job_dict(), timedelta(minutes=30)))
     print("Setup Complete")
     yield
     print("Shutting down...")
