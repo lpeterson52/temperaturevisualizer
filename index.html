@@ -12,30 +12,104 @@
     />
     <link rel="stylesheet" href="index.css" />
     <link rel="icon" href="favicon.ico" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- uPlot -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js"></script>
+    <script src='https://unpkg.com/simple-statistics@7.8.8/dist/simple-statistics.min.js'></script>
   </head>
   <body>
     <header>
-      <h1>Temperature Visualizer</h1>
+      <div class="header-inner">
+        <h1>Temperature Visualizer</h1>
+        <form id="dateForm">
+          <div class="form-row">
+            <div class="field-group">
+              <label for="startDate">Start Date</label>
+              <input type="date" id="startDate" name="startDate" required />
+            </div>
+            <div class="field-group">
+              <label for="endDate">End Date</label>
+              <input type="date" id="endDate" name="endDate" required />
+            </div>
+            <button type="submit" id="submitBtn">
+              <span class="btn-text">Load Data</span>
+              <span class="btn-icon">→</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </header>
 
     <main>
-      <div id="date-form">
-        <form id="dateForm">
-          <label for="startDate">Start Date:</label>
-          <input type="date" id="startDate" name="startDate" required />
-          <label for="endDate">End Date:</label>
-          <input type="date" id="endDate" name="endDate" required />
-          <button type="submit">Submit</button>
-        </form>
-      </div>
+      <p id="instructions" class="instructions-banner" style="display:none;"></p>
+
       <div id="app">
         <div id="main-container">
-          <div id="chart-container">
-            <h2 id="instructions">
-              Enter the date range to visualize the temperature data
-            </h2>
-            <canvas id="temperatureChart"></canvas>
+          <div id="stats-panel">
+            <div class="stats-header">
+              <span class="stats-title">Statistics (°C)</span>
+              <div id="stats-selector-row"></div>
+            </div>
+            <div class="stats-body">
+              <div class="stats-group">
+                <div class="stats-row"><span class="stats-label">Count</span><span class="stats-value" id="stat-count">—</span></div>
+                <div class="stats-row"><span class="stats-label">Min</span><span class="stats-value" id="stat-min">—</span></div>
+                <div class="stats-row"><span class="stats-label">Max</span><span class="stats-value" id="stat-max">—</span></div>
+              </div>
+              <div class="stats-section-header">Center</div>
+              <div class="stats-group">
+                <div class="stats-row"><span class="stats-label">Mean</span><span class="stats-value" id="stat-mean">—</span></div>
+                <div class="stats-row"><span class="stats-label">Median</span><span class="stats-value" id="stat-median">—</span></div>
+                <div class="stats-row"><span class="stats-label">Mode</span><span class="stats-value" id="stat-mode">—</span></div>
+                <div class="stats-row"><span class="stats-label">Geo. Mean</span><span class="stats-value" id="stat-geo-mean">—</span></div>
+                <div class="stats-row"><span class="stats-label">Har. Mean</span><span class="stats-value" id="stat-har-mean">—</span></div>
+                <div class="stats-row"><span class="stats-label">Quad. Mean</span><span class="stats-value" id="stat-rms">—</span></div>
+              </div>
+              <div class="stats-section-header">Spread</div>
+              <div class="stats-group">
+                <div class="stats-row"><span class="stats-label">Std. Dev</span><span class="stats-value" id="stat-std-dev">—</span></div>
+                <div class="stats-row"><span class="stats-label">Variance</span><span class="stats-value" id="stat-var">—</span></div>
+                <div class="stats-row"><span class="stats-label">IQR</span><span class="stats-value" id="stat-iqr">—</span></div>
+                <div class="stats-row"><span class="stats-label">Skewness</span><span class="stats-value" id="stat-skewness">—</span></div>
+              </div>
+              <div class="stats-section-header">Percentiles</div>
+              <div class="stats-group">
+                <div class="stats-row"><span class="stats-label">1st</span><span class="stats-value" id="stat-p1">—</span></div>
+                <div class="stats-row"><span class="stats-label">5th</span><span class="stats-value" id="stat-p5">—</span></div>
+                <div class="stats-row"><span class="stats-label">10th</span><span class="stats-value" id="stat-p10">—</span></div>
+                <div class="stats-row"><span class="stats-label">25th</span><span class="stats-value" id="stat-p25">—</span></div>
+                <div class="stats-row"><span class="stats-label">50th</span><span class="stats-value" id="stat-p50">—</span></div>
+                <div class="stats-row"><span class="stats-label">75th</span><span class="stats-value" id="stat-p75">—</span></div>
+                <div class="stats-row"><span class="stats-label">90th</span><span class="stats-value" id="stat-p90">—</span></div>
+                <div class="stats-row"><span class="stats-label">95th</span><span class="stats-value" id="stat-p95">—</span></div>
+                <div class="stats-row"><span class="stats-label">99th</span><span class="stats-value" id="stat-p99">—</span></div>
+              </div>
+            </div>
+          </div>
+          <div id="chart-wrapper">
+            <div id="chart-toolbar">
+              <div class="hint-text">
+                <span>🖱️ Scroll to zoom</span>
+                <span>🖱 Drag to pan</span>
+                <span>📍 Click to drop marker</span>
+              </div>
+              <button id="reset-zoom-btn" title="Reset zoom">Reset Zoom</button>
+            </div>
+            <div id="chart-container">
+              <div id="empty-state">
+                <div class="empty-icon">📈</div>
+                <p>Enter a date range to visualize temperature data</p>
+              </div>
+              <!-- uPlot mounts here -->
+              <div id="uplot-container"></div>
+              <!-- Crosshair + marker overlay (sits above uPlot canvas) -->
+              <canvas id="overlay-canvas"></canvas>
+            </div>
+            <!-- Marker info bar -->
+            <div id="marker-bar" style="display:none;">
+              <div id="marker-bar-content"></div>
+              <button id="clear-markers-btn" title="Clear markers">✕ Clear</button>
+            </div>
           </div>
           <div id="custom-legend"></div>
         </div>
@@ -43,9 +117,9 @@
     </main>
 
     <footer>
-      <p>&copy; 2025 Temperature Visualizer</p>
+      <p>&copy; 2026 Temperature Visualizer</p>
     </footer>
 
-    <script src="index.js"></script>
+    <script type="module" src="index.js"></script>
   </body>
 </html>
