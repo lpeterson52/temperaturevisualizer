@@ -1,6 +1,6 @@
 import FetchJob from './fetchJob.js'
 
-const DEBUG = true;
+const DEBUG = false;
 const backendUrl = "https://temperaturevisualizer.onrender.com/";
 const apiUrl = DEBUG ? "http://localhost:8000/api" : backendUrl + "api";
 
