@@ -1,6 +1,6 @@
 import pytest
 from services import csv_merge
-from datetime import date
+from datetime import date, timedelta
 from api.cache import fetch_file_json, get_file_dict
 import respx
 import httpx
@@ -39,6 +39,23 @@ def test_date_to_filename():
               csv_merge.date_to_filename(date(2022, 9, 30)),
               csv_merge.date_to_filename(date(2022, 10, 30))]
     assert expected == actual
+
+def test_clear_old_jobs_removes_expired_jobs(monkeypatch):
+    fake_now = 1000.0
+    monkeypatch.setattr(csv_merge.time, "monotonic", lambda: fake_now)
+
+    job_dict = {
+        "old_job": {"time_started": 980.0},
+        "fresh_job": {"time_started": 995.5},
+        "missing_start": {"status": "queued"},
+    }
+
+    removed_count = csv_merge.clear_old_jobs(job_dict, timedelta(seconds=10))
+
+    assert removed_count == 1
+    assert "old_job" not in job_dict
+    assert "fresh_job" in job_dict
+    assert "missing_start" in job_dict
 
 # Fetch tests
 
@@ -115,6 +132,10 @@ async def test_live_fetch_from_google_drive():
     print("fetched")
     df = await csv_merge.fetch_and_merge_csvs(start_date=start_date, 
                                               end_date=end_date, 
-                                              cached_file_dict=filedict)
+                                              cached_file_dict=filedict,
+                                              decimate=True)
 
     assert not df.empty
+
+
+    

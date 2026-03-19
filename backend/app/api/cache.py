@@ -6,6 +6,7 @@ This module contains the cached file information for the temperature visualizer 
 
 import asyncio
 from fastapi import APIRouter
+from typing import Dict
 import httpx
 
 # Google Apps Script URL for fetching file information
@@ -16,6 +17,15 @@ router = APIRouter()
 cached_file_dict = {}
 # dict struct: {filename: url}
 
+@router.get("/", response_model=Dict[str, str])
+def get_available_files():
+    """
+    Returns the cached file dictionary.
+
+    Returns:
+        dict: A python dict containing file information in the form {filename: url}
+    """
+    return cached_file_dict
 
 async def fetch_file_json():
     """
@@ -45,6 +55,13 @@ def get_file_dict(file_json):
     return_dict = {fileobject["name"]: fileobject["url"] for fileobject in file_json}
     return return_dict
 
+async def populate_cache():
+    """
+    Populates cached file dictionary.
+    """
+    global cached_file_dict
+    file_json = await fetch_file_json()
+    cached_file_dict = get_file_dict(file_json)
 
 async def refresh_cache():
     """
@@ -52,17 +69,6 @@ async def refresh_cache():
     """
     global cached_file_dict
     while True:
-        file_json = await fetch_file_json()
-        cached_file_dict = get_file_dict(file_json)
-        print("Cache refreshed")
         await asyncio.sleep(3600) # refresh every hour
-
-@router.get("/")
-def get_available_files():
-    """
-    Returns the cached file dictionary.
-
-    Returns:
-        dict: A python dict containing file information in the form {filename: url}
-    """
-    return cached_file_dict
+        await populate_cache()
+        print("Cache refreshed")
