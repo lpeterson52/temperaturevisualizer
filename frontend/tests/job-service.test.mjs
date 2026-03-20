@@ -11,22 +11,24 @@ test('wakeupServer swallows rejected wakeup fetches and logs them', async () => 
     const originalFetch = globalThis.fetch;
     let warned = false;
 
-    globalThis.fetch = () => Promise.reject(new Error('offline'));
-    wakeupServer({
-        backendUrl: 'https://example.com/',
-        wakeupEnabled: true,
-        logger: {
-            warn(message, error) {
-                warned = message === 'Backend wakeup failed.' && error instanceof Error;
+    try {
+        globalThis.fetch = () => Promise.reject(new Error('offline'));
+        wakeupServer({
+            backendUrl: 'https://example.com/',
+            wakeupEnabled: true,
+            logger: {
+                warn(message, error) {
+                    warned = message === 'Backend wakeup failed.' && error instanceof Error;
+                },
             },
-        },
-    });
+        });
 
-    await Promise.resolve();
-    await Promise.resolve();
-    assert.equal(warned, true);
-
-    globalThis.fetch = originalFetch;
+        await Promise.resolve();
+        await Promise.resolve();
+        assert.equal(warned, true);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });
 
 test('pollJobStatus times out when the job never completes', async () => {

@@ -164,7 +164,14 @@ export function createOverlayController({
     }
 
     function renderTooltip(chartController, dataIndex, clientX, clientY) {
-        if (dataIndex < 0 || !state.dataset.timestamps[dataIndex]) {
+        const timestamps = state.dataset.timestamps;
+        if (dataIndex < 0 || dataIndex >= timestamps.length) {
+            hideTooltip();
+            return;
+        }
+
+        const timestamp = timestamps[dataIndex];
+        if (!Number.isFinite(timestamp)) {
             hideTooltip();
             return;
         }
@@ -173,7 +180,7 @@ export function createOverlayController({
         const cssY = clientY - containerRect.top;
         const { value, color } = getClosestVisibleTemperatureAtIndex(chartController, dataIndex, cssY);
 
-        timeEl.textContent = formatTooltipTime(state.dataset.timestamps[dataIndex]);
+        timeEl.textContent = formatTooltipTime(timestamp);
         if (value == null) {
             bulletEl.style.display = 'none';
             temperatureEl.style.display = 'none';

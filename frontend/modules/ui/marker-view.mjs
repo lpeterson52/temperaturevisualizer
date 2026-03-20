@@ -93,19 +93,26 @@ export function createMarkerView({ barEl, contentEl }) {
                     ),
                 ),
             );
-        } else if (previewIndex >= 0 && state.dataset.timestamps[previewIndex]) {
-            fragment.appendChild(
-                buildMarkerSection(state, { labelIndex: previewIndex }, 'marker-b', true),
-            );
-            fragment.appendChild(
-                buildDeltaElement(
-                    formatDurationBetweenSeconds(
-                        state.dataset.timestamps[markerA.labelIndex],
-                        state.dataset.timestamps[previewIndex],
+        } else {
+            const previewTimestamp = state.dataset.timestamps[previewIndex];
+            if (
+                previewIndex >= 0 &&
+                previewIndex < state.dataset.timestamps.length &&
+                Number.isFinite(previewTimestamp)
+            ) {
+                fragment.appendChild(
+                    buildMarkerSection(state, { labelIndex: previewIndex }, 'marker-b', true),
+                );
+                fragment.appendChild(
+                    buildDeltaElement(
+                        formatDurationBetweenSeconds(
+                            state.dataset.timestamps[markerA.labelIndex],
+                            previewTimestamp,
+                        ),
+                        true,
                     ),
-                    true,
-                ),
-            );
+                );
+            }
         }
 
         barEl.style.display = 'flex';
