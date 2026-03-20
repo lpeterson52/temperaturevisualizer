@@ -92,10 +92,13 @@ domRefs.dateForm?.addEventListener('submit', async event => {
     }
 
     app.clearValidationError();
-    domRefs.emptyState.classList.add('hidden');
     domRefs.submitBtn.disabled = true;
     try {
         await app.loadRange(startDate, endDate);
+        domRefs.emptyState.classList.add('hidden');
+    } catch (error) {
+        domRefs.emptyState.classList.remove('hidden');
+        throw error;
     } finally {
         domRefs.submitBtn.disabled = false;
     }
