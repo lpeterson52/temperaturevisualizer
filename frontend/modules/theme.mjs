@@ -1,8 +1,8 @@
-function clamp(value, min, max) {
+export function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
 
-function parseHexColor(color) {
+export function parseHexColor(color) {
     if (typeof color !== 'string') {
         return null;
     }
@@ -30,7 +30,7 @@ function parseHexColor(color) {
     return null;
 }
 
-function rgbToHsl(red, green, blue) {
+export function rgbToHsl(red, green, blue) {
     const r = red / 255;
     const g = green / 255;
     const b = blue / 255;
@@ -63,7 +63,7 @@ function rgbToHsl(red, green, blue) {
     return [hue / 6, saturation, lightness];
 }
 
-function hslToRgb(hue, saturation, lightness) {
+export function hslToRgb(hue, saturation, lightness) {
     if (saturation === 0) {
         const gray = Math.round(lightness * 255);
         return [gray, gray, gray];
@@ -100,9 +100,82 @@ function hslToRgb(hue, saturation, lightness) {
     return [r, g, b];
 }
 
-function rgbToHex(red, green, blue) {
+export function rgbToHex(red, green, blue) {
     const toHex = channel => channel.toString(16).padStart(2, '0');
     return `#${toHex(red)}${toHex(green)}${toHex(blue)}`;
+}
+
+export function srgbToLinear(v) {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+
+export function luminance(hex) {
+    const rgb = parseHexColor(hex);
+    if (!rgb) {
+        return 0;
+    }
+
+    const [r, g, b] = rgb;
+    const R = srgbToLinear(r);
+    const G = srgbToLinear(g);
+    const B = srgbToLinear(b);
+    return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+}
+
+export function contrastRatio(a, b) {
+    const l1 = luminance(a);
+    const l2 = luminance(b);
+    const [lighter, darker] = l1 >= l2 ? [l1, l2] : [l2, l1];
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+export function hexToRgba(hex, alpha = 0.18) {
+    const rgb = parseHexColor(hex);
+    if (!rgb) {
+        return `rgba(0,0,0,${alpha})`;
+    }
+
+    const [r, g, b] = rgb;
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+export function fitDualContrast(hex, {
+    darkBg,
+    lightBg,
+    minContrast = 3,
+    minLightness = 0.15,
+    maxLightness = 0.72,
+    step = 0.01,
+} = {}) {
+    const rgb = parseHexColor(hex);
+    if (!rgb) {
+        throw new Error(`Invalid color seed: ${hex}`);
+    }
+
+    const [hue, saturation] = rgbToHsl(...rgb);
+    let bestHex = hex;
+    let bestScore = 0;
+
+    for (let lightness = minLightness; lightness <= maxLightness; lightness += step) {
+        const [r, g, b] = hslToRgb(hue, saturation, clamp(lightness, 0, 1));
+        const candidate = rgbToHex(r, g, b);
+        const score = Math.min(
+            contrastRatio(candidate, darkBg),
+            contrastRatio(candidate, lightBg),
+        );
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestHex = candidate;
+        }
+    }
+
+    if (bestScore < minContrast) {
+        throw new Error(`Could not meet ${minContrast}:1 contrast for seed ${hex}`);
+    }
+
+    return bestHex;
 }
 
 export function getCurrentTheme() {

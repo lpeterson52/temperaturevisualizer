@@ -239,7 +239,7 @@ header h1 {
 main {
   flex: 1;
   padding: 20px 24px;
-  max-width: 95vw;
+  max-width: 90vw;
   width: 100%;
   margin: 0 auto;
 }

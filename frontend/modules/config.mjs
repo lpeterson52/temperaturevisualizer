@@ -1,3 +1,8 @@
+import {
+    fitDualContrast,
+    hexToRgba,
+} from './theme.mjs';
+
 export const BACKEND_URL = 'https://temperaturevisualizer.onrender.com/';
 export const LOCAL_API_URL = 'http://localhost:8000/api';
 export const DEFAULT_POLL_OPTIONS = Object.freeze({
@@ -11,40 +16,27 @@ export const TOOLTIP_FONT = '0.78rem Inter, system-ui, sans-serif';
 export const TANK_LETTERS = Object.freeze(['A', 'B', 'C', 'D']);
 export const TANK_STATES = Object.freeze(['Warm', 'Cool']);
 export const STAT_PERCENTILES = Object.freeze([1, 5, 10, 25, 50, 75, 90, 95, 99]);
-export const COLOR_PAIRS = Object.freeze([
-    ['#e6194b', 'rgba(230,25,75,0.15)'],
-    ['#3cb44b', 'rgba(60,180,75,0.15)'],
-    ['#ffe119', 'rgba(255,225,25,0.15)'],
-    ['#4f8ef7', 'rgba(79,142,247,0.15)'],
-    ['#f58231', 'rgba(245,130,49,0.15)'],
-    ['#911eb4', 'rgba(145,30,180,0.15)'],
-    ['#46f0f0', 'rgba(70,240,240,0.15)'],
-    ['#f032e6', 'rgba(240,50,230,0.15)'],
-    ['#d2f53c', 'rgba(210,245,60,0.15)'],
-    ['#fabebe', 'rgba(250,190,190,0.15)'],
-    ['#008080', 'rgba(0,128,128,0.15)'],
-    ['#e6beff', 'rgba(230,190,255,0.15)'],
-    ['#aa6e28', 'rgba(170,110,40,0.15)'],
-    ['#ff7f0e', 'rgba(255,127,14,0.15)'],
-    ['#800000', 'rgba(128,0,0,0.15)'],
-    ['#aaffc3', 'rgba(170,255,195,0.15)'],
-    ['#808000', 'rgba(128,128,0,0.15)'],
-    ['#ffd8b1', 'rgba(255,216,177,0.15)'],
-    ['#000080', 'rgba(0,0,128,0.15)'],
-    ['#808080', 'rgba(128,128,128,0.15)'],
-    ['#0057e7', 'rgba(0,87,231,0.15)'],
-    ['#a0a0a0', 'rgba(160,160,160,0.15)'],
-    ['#a9a9a9', 'rgba(169,169,169,0.15)'],
-    ['#b22222', 'rgba(178,34,34,0.15)'],
-    ['#228b22', 'rgba(34,139,34,0.15)'],
-    ['#4682b4', 'rgba(70,130,180,0.15)'],
-    ['#daa520', 'rgba(218,165,32,0.15)'],
-    ['#9932cc', 'rgba(153,50,204,0.15)'],
-    ['#ff69b4', 'rgba(255,105,180,0.15)'],
-    ['#cd5c5c', 'rgba(205,92,92,0.15)'],
-    ['#20b2aa', 'rgba(32,178,170,0.15)'],
-    ['#b8860b', 'rgba(184,134,11,0.15)'],
+const DARK_BG = '#1a1d27';
+const LIGHT_BG = '#ecece0';
+const MIN_UI_CONTRAST = 3; // WCAG non-text UI contrast target
+
+const COLOR_SEEDS = Object.freeze([
+    '#e6194b', '#3cb44b', '#ffe119', '#4f8ef7', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
+    '#d2f53c', '#fabebe', '#008080', '#e6beff', '#aa6e28', '#ff7f0e', '#800000', '#aaffc3',
+    '#808000', '#ffd8b1', '#000080', '#808080', '#0057e7', '#a0a0a0', '#a9a9a9', '#b22222',
+    '#228b22', '#4682b4', '#daa520', '#9932cc', '#ff69b4', '#cd5c5c', '#20b2aa', '#b8860b',
 ]);
+
+export const COLOR_PAIRS = Object.freeze(
+    COLOR_SEEDS.map((seed) => {
+        const stroke = fitDualContrast(seed, {
+            darkBg: DARK_BG,
+            lightBg: LIGHT_BG,
+            minContrast: MIN_UI_CONTRAST,
+        });
+        return [stroke, hexToRgba(stroke)];
+    }),
+);
 
 function buildTankSeries() {
     const series = [];
