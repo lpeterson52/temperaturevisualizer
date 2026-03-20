@@ -178,7 +178,7 @@ export function getXAxisTicks(minSeconds, maxSeconds, pixelWidth) {
     if (pixelWidth <= 0 || maxSeconds <= minSeconds) {
         return [];
     }
-
+    
     const stepMinutes = calcTimeStepSize(minSeconds, maxSeconds, pixelWidth);
     const stepSeconds = stepMinutes * 60;
     const ticks = [];

@@ -1,12 +1,14 @@
 import { TANK_LETTERS } from '../config.mjs';
+import { isLightTheme, getSeriesStrokeForTheme } from '../theme.mjs';
 
 function createLegendItem(meta, isVisible, seriesIndex) {
+    const displayColor = getSeriesStrokeForTheme(meta.stroke);
     const itemEl = document.createElement('div');
     itemEl.className = `legend-item${isVisible ? ' active' : ''}`;
     itemEl.dataset.seriesIndex = String(seriesIndex);
     itemEl.setAttribute('role', 'button');
     itemEl.tabIndex = 0;
-    itemEl.style.setProperty('--tank-color', meta.stroke);
+    itemEl.style.setProperty('--tank-color', displayColor);
 
     const colorSwatchEl = document.createElement('span');
     colorSwatchEl.style.cssText = `
@@ -14,9 +16,9 @@ function createLegendItem(meta, isVisible, seriesIndex) {
         width:8px;
         height:8px;
         flex-shrink:0;
-        background:${meta.stroke};
+        background:${displayColor};
         border-radius:2px;
-        opacity:${isVisible ? 1 : 0.3};
+        opacity:${isVisible ? 1 : (isLightTheme() ? 0.55 : 0.3)};
     `;
 
     const labelEl = document.createElement('span');

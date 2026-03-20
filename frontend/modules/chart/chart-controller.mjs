@@ -1,4 +1,5 @@
 import { CHART_FONT } from '../config.mjs';
+import { getCssColorVar, getSeriesStrokeForTheme } from '../theme.mjs';
 import {
     calcTimeStepSize,
     formatAxisTemperature,
@@ -182,7 +183,11 @@ export function createChartController({
 
     function createOptions() {
         const dpr = globalThis.devicePixelRatio || 1;
+        const axisStroke = getCssColorVar('--chart-axis-stroke', '#555d75');
+        const gridStroke = getCssColorVar('--chart-grid-stroke', 'rgba(255,255,255,0.04)');
+        const tickStroke = getCssColorVar('--chart-tick-stroke', 'rgba(255,255,255,0.2)');
 
+        // opts
         return {
             width: containerEl.clientWidth,
             height: containerEl.clientHeight,
@@ -200,7 +205,7 @@ export function createChartController({
                 },
                 ...state.dataset.seriesMeta.map((meta, index) => ({
                     label: meta.label,
-                    stroke: meta.stroke,
+                    stroke: getSeriesStrokeForTheme(meta.stroke),
                     width: 1.5,
                     show: state.dataset.seriesVisible[index],
                     spanGaps: false,
@@ -212,9 +217,9 @@ export function createChartController({
             ],
             axes: [
                 {
-                    stroke: '#555d75',
-                    grid: { stroke: 'rgba(255,255,255,0.04)', width: 1 },
-                    ticks: { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+                    stroke: axisStroke,
+                    grid: { stroke: gridStroke, width: 1 },
+                    ticks: { stroke: tickStroke, width: 1 },
                     font: CHART_FONT,
                     values: (u, splits) => {
                         const plotWidth = u.bbox.width / dpr;
@@ -234,9 +239,9 @@ export function createChartController({
                 },
                 {
                     scale: 'C',
-                    stroke: '#555d75',
-                    grid: { stroke: 'rgba(255,255,255,0.04)', width: 1 },
-                    ticks: { stroke: 'rgba(255,255,255,0.04)', width: 1 },
+                    stroke: axisStroke,
+                    grid: { stroke: gridStroke, width: 1 },
+                    ticks: { stroke: tickStroke, width: 1 },
                     font: CHART_FONT,
                     values: (_, ticks) => ticks.map(value => formatAxisTemperature(value, 'C')),
                     size: (_, values) => measureAxisLabelWidth(values, '-99.9° C'),
@@ -244,7 +249,7 @@ export function createChartController({
                 },
                 {
                     scale: 'F',
-                    stroke: '#555d75',
+                    stroke: axisStroke,
                     grid: { show: false },
                     font: CHART_FONT,
                     values: (_, ticks) => ticks.map(value => formatAxisTemperature(value, 'F')),
@@ -326,6 +331,7 @@ export function createChartController({
         const { initialMinX, initialMaxX } = state.viewport;
         chart.setScale('x', { min: initialMinX, max: initialMaxX });
         syncViewport(initialMinX, initialMaxX);
+        render();
     }
 
     function getPlotBounds() {

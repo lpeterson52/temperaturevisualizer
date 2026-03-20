@@ -134,6 +134,15 @@ export function createApp(domRefs, runtimeConfig = resolveRuntimeConfig()) {
         renderViews();
     }
 
+    function refreshTheme() {
+        if (state.dataset.timestamps.length) {
+            chartController.render();
+            overlayController.attachToCurrentChart();
+        }
+
+        renderViews();
+    }
+
     function destroy() {
         overlayController.destroy();
         chartController.destroy();
@@ -144,6 +153,7 @@ export function createApp(domRefs, runtimeConfig = resolveRuntimeConfig()) {
         destroy,
         init,
         loadRange,
+        refreshTheme,
         resetZoom,
         showValidationError,
     };

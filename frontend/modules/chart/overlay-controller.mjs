@@ -1,4 +1,5 @@
 import { formatTooltipTime } from '../data.mjs';
+import { getCssColorVar, getSeriesStrokeForTheme } from '../theme.mjs';
 import {
     clearMarkers,
     placeMarkerAtIndex,
@@ -158,7 +159,7 @@ export function createOverlayController({
 
         return {
             value: state.dataset.seriesData[closestSeriesIndex][dataIndex],
-            color: state.dataset.seriesMeta[closestSeriesIndex].stroke,
+            color: getSeriesStrokeForTheme(state.dataset.seriesMeta[closestSeriesIndex].stroke),
         };
     }
 
@@ -310,7 +311,7 @@ export function createOverlayController({
         }
 
         context.save();
-        context.strokeStyle = 'rgba(255,255,255,0.2)';
+        context.strokeStyle = getCssColorVar('--chart-crosshair-stroke', 'rgba(255,255,255,0.2)');
         context.lineWidth = 1;
         context.setLineDash([4, 4]);
         context.beginPath();

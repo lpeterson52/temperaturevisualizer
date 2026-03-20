@@ -6,6 +6,7 @@ import {
     ensureStatsSelection,
     getVisibleDatasets,
 } from '../state.mjs';
+import { getSeriesStrokeForTheme } from '../theme.mjs';
 
 const EMPTY_STAT = '—';
 const STAT_ELEMENT_IDS = Object.freeze([
@@ -125,7 +126,7 @@ function renderSelector(selectorRowEl, visibleDatasets, selectedDatasetIndex) {
         const labelEl = document.createElement('span');
         labelEl.className = 'stats-single-label';
         labelEl.textContent = visibleDatasets[0].meta.label.replace(' (°C)', '');
-        labelEl.style.color = visibleDatasets[0].meta.stroke;
+        labelEl.style.color = getSeriesStrokeForTheme(visibleDatasets[0].meta.stroke);
         selectorRowEl.appendChild(labelEl);
         return;
     }
@@ -138,13 +139,14 @@ function renderSelector(selectorRowEl, visibleDatasets, selectedDatasetIndex) {
             const optionEl = document.createElement('option');
             optionEl.value = String(index);
             optionEl.textContent = meta.label.replace(' (°C)', '');
-            optionEl.style.color = meta.stroke;
+            optionEl.style.color = getSeriesStrokeForTheme(meta.stroke);
             optionEl.selected = index === selectedDatasetIndex;
             selectEl.appendChild(optionEl);
         });
 
         if (selectedDatasetIndex >= 0) {
-            selectEl.style.color = visibleDatasets.find(({ index }) => index === selectedDatasetIndex)?.meta.stroke ?? '';
+            const selectedMeta = visibleDatasets.find(({ index }) => index === selectedDatasetIndex)?.meta;
+            selectEl.style.color = selectedMeta ? getSeriesStrokeForTheme(selectedMeta.stroke) : '';
         }
 
         selectorRowEl.appendChild(selectEl);

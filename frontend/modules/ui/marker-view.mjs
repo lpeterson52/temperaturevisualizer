@@ -1,4 +1,5 @@
 import { formatDurationBetweenSeconds, formatTimeAxisLabel } from '../data.mjs';
+import { getSeriesStrokeForTheme } from '../theme.mjs';
 
 function buildMarkerSection(state, marker, dotClassName, dimmed = false) {
     const sectionEl = document.createElement('div');
@@ -38,7 +39,7 @@ function buildMarkerSection(state, marker, dotClassName, dimmed = false) {
 
         const chipEl = document.createElement('span');
         chipEl.className = 'marker-chip';
-        chipEl.style.color = state.dataset.seriesMeta[seriesIndex].stroke;
+        chipEl.style.color = getSeriesStrokeForTheme(state.dataset.seriesMeta[seriesIndex].stroke);
         chipEl.textContent = `${value.toFixed(2)} °C`;
         valuesEl.appendChild(chipEl);
     });
