@@ -747,8 +747,9 @@ footer {
   #chart-container {
     height: 55vw;
     min-height: 260px;
-    width: 90vw;
+    width: 84vw;
   }
+  
 }
 
 @media (max-width: 600px) {
