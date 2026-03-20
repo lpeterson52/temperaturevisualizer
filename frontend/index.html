@@ -41,7 +41,7 @@
     </header>
 
     <main>
-      <p id="instructions" class="instructions-banner" style="display:none;"></p>
+      <p id="instructions" class="instructions-banner" hidden role="alert" aria-live="assertive"></p>
 
       <div id="app">
         <div id="main-container">
@@ -106,7 +106,7 @@
               <canvas id="overlay-canvas"></canvas>
             </div>
             <!-- Marker info bar -->
-            <div id="marker-bar" style="display:none;">
+            <div id="marker-bar" style="display:none;" aria-live="polite">
               <div id="marker-bar-content"></div>
               <button id="clear-markers-btn" title="Clear markers">✕ Clear</button>
             </div>
