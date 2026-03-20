@@ -32,9 +32,9 @@ async def start_merge_job(
     Returns:
         job_id: Id of the job that was created
     """
-    job_id = await app.services.csv_merge.create_merge_job(start_date, end_date)
-    logger.info("Created job with id %s", job_id["job_id"])
-    return JobIDResponse(job_id=job_id["job_id"])
+    job_info = await app.services.csv_merge.create_merge_job(start_date, end_date)
+    logger.info("Created job with id %s", job_info["job_id"])
+    return JobIDResponse(job_id=job_info["job_id"])
 
 
 @router.get("/merge-status", response_model=MergeStatusResponse)

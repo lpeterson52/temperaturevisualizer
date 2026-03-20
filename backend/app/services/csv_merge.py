@@ -8,7 +8,8 @@ import io
 import asyncio
 import uuid
 from typing import List, Dict
-from datetime import date
+from datetime import date, timedelta
+import time
 from app.api.cache import get_available_files
 from app.services.clean_csv import sanitize_nan_vals
 import pandas as pd
@@ -33,7 +34,8 @@ async def create_merge_job(start_date: str, end_date: str) -> dict:
         "status": "queued", 
         "progress": 0,
         "result": None,
-        "error": None
+        "error": None,
+        "time_started": time.monotonic() # time since program start in (float seconds)
     }
     
     asyncio.create_task(run_merge_job(job_id, start_date, end_date))
@@ -174,6 +176,31 @@ def decimate_dataframe(df: pd.DataFrame, decimation_factor: int) -> pd.DataFrame
     if decimation_factor > 1:
         return df.iloc[::decimation_factor]
     return df
+
+def clear_old_jobs(job_dict: Dict[str, Dict], max_time_allowed: timedelta) -> int:
+    now: float = time.monotonic()
+    max_age_seconds: float = max_time_allowed.total_seconds()
+
+    expired_job_ids: List[str] = [
+        job_id
+        for job_id, job in job_dict.items()
+        if (now - job.get("time_started", now)) > max_age_seconds
+    ]
+
+    for job_id in expired_job_ids:
+        del job_dict[job_id]
+
+    return len(expired_job_ids)
+
+async def run_periodic_job_cleanup(job_dict: Dict[str, Dict], max_time_allowed: timedelta) -> int:
+    while True:
+        await asyncio.sleep(1200) # prune every 20 minutes
+        clear_old_jobs(job_dict, max_time_allowed)
+        print("Pruned Job Dict")
+
+def get_job_dict():
+    global jobs
+    return jobs
 
 # ------------------------------
 # ---- Conversion Functions ----
