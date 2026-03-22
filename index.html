@@ -37,11 +37,15 @@
             </button>
           </div>
         </form>
+        <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark mode">
+          <span class="theme-toggle-icon" aria-hidden="true">🌙</span>
+          <span class="theme-toggle-text">Dark</span>
+        </button>
       </div>
     </header>
 
     <main>
-      <p id="instructions" class="instructions-banner" style="display:none;"></p>
+      <p id="instructions" class="instructions-banner" hidden role="alert" aria-live="assertive"></p>
 
       <div id="app">
         <div id="main-container">
@@ -106,7 +110,7 @@
               <canvas id="overlay-canvas"></canvas>
             </div>
             <!-- Marker info bar -->
-            <div id="marker-bar" style="display:none;">
+            <div id="marker-bar" style="display:none;" aria-live="polite">
               <div id="marker-bar-content"></div>
               <button id="clear-markers-btn" title="Clear markers">✕ Clear</button>
             </div>
